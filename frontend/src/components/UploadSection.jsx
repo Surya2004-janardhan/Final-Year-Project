@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileVideo, Activity } from 'lucide-react';
+import { Upload } from 'lucide-react';
 
 const UploadSection = ({ onFileSelect, isProcessing }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -28,20 +28,17 @@ const UploadSection = ({ onFileSelect, isProcessing }) => {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto py-24 relative">
-      <div className="glow-orb -top-20 -left-20 opacity-30" />
-      <div className="glow-orb -bottom-20 -right-20 opacity-20" />
-
+    <div className="w-full max-w-4xl mx-auto relative group">
       <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
-        className={`upload-zone relative flex flex-col items-center justify-center p-16 h-[400px] border-2 transition-all cursor-pointer overflow-hidden
-          ${dragActive ? 'border-white/50 bg-white/5' : 'border-white/10 bg-white/[0.01] hover:bg-white/[0.03]'}
-          ${isProcessing ? 'pointer-events-none opacity-40 grayscale' : ''}
+        className={`glass-surface relative flex flex-col items-center justify-center p-20 h-[380px] transition-all cursor-pointer overflow-hidden
+          ${dragActive ? 'border-white/40 bg-white/5' : 'border-white/10 hover:border-white/20'}
+          ${isProcessing ? 'pointer-events-none opacity-20 filter blur-sm' : ''}
         `}
         onClick={() => !isProcessing && document.getElementById("file-upload").click()}
       >
@@ -53,26 +50,20 @@ const UploadSection = ({ onFileSelect, isProcessing }) => {
           onChange={handleFileChange}
         />
 
-        <div className="relative z-10 flex flex-col items-center gap-10">
-          <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:scale-110 transition-transform">
-             <Upload className="w-8 h-8 text-white/40" />
+        <div className="relative z-10 flex flex-col items-center gap-8">
+          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/5 group-hover:scale-110 group-hover:bg-white/10 transition-all duration-700">
+             <Upload className="w-6 h-6 text-white/40" />
           </div>
           
-          <div className="flex flex-col items-center gap-3 text-center">
-             <h3 className="text-3xl font-extrabold tracking-tight">Upload Media</h3>
-             <p className="text-sm font-bold text-white/30 tracking-widest uppercase">Video data ingestion for spectral analysis</p>
-          </div>
-
-          <div className="flex items-center gap-6 pt-4 text-[10px] font-bold uppercase tracking-[0.3em] opacity-30">
-             <div className="flex items-center gap-2">
-                <FileVideo className="w-3.5 h-3.5" /> MP4/WEBM
-             </div>
-             <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
-             <div className="flex items-center gap-2">
-                <Activity className="w-3.5 h-3.5" /> 11s MAX
-             </div>
+          <div className="flex flex-col items-center gap-2 text-center">
+             <h3 className="text-3xl font-extrabold tracking-tighter text-white">Upload Media</h3>
+             <p className="text-xs font-bold text-white/20 tracking-[0.2em] uppercase">Select 11s video for analysis</p>
           </div>
         </div>
+        
+        {/* Decorative Internal Glass Elements */}
+        <div className="absolute top-0 left-0 w-24 h-24 border-t border-l border-white/5 pointer-events-none rounded-tl-3xl" />
+        <div className="absolute bottom-0 right-0 w-24 h-24 border-b border-r border-white/5 pointer-events-none rounded-br-3xl" />
       </motion.div>
     </div>
   );

@@ -2,13 +2,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-deep: #050505;
+  --color-bg-deep: #020202;
   --color-glass-surface: rgba(255, 255, 255, 0.03);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
   --color-text-bright: #ffffff;
   --color-text-dim: #a1a1aa;
-  --color-text-muted: #52525b;
-  --color-accent-white: #ffffff;
+  --color-text-muted: #4b4b4b;
 }
 
 :root {
@@ -24,98 +23,71 @@ body {
   overflow-x: hidden;
 }
 
-/* Glassmorphism Detail */
+/* Enhanced Glassmorphism */
 .glass-surface {
-  background: var(--color-glass-surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid var(--color-glass-border);
-  border-radius: 24px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(60px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 32px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 16px;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(255, 255, 255, 0.015);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-card:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
 }
 
-/* Dashboard Decorations */
-.graticule {
+/* Loader Styles */
+.loader-bar {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.loader-progress {
   position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: white;
+  transition: width 0.3s ease;
+}
+
+/* Background Graticule */
+.bg-mesh {
+  position: fixed;
   inset: 0;
   pointer-events: none;
   background-image: 
-    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-  background-size: 80px 80px;
-  opacity: 0.5;
-}
-
-.corner-detail::before {
-  content: '';
-  position: absolute;
-  top: 0; right: 0;
-  width: 40px; height: 40px;
-  border-top: 1px solid rgba(255, 255, 255, 0.3);
-  border-right: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-/* High-Detail Labels */
-.t-mono-label {
-  font-family: var(--font-sans);
-  font-size: 9px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.4em;
-  color: var(--color-text-muted);
-}
-
-.t-stats-value {
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  color: #fff;
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 100px 100px;
+  opacity: 0.6;
 }
 
 /* Animations */
-@keyframes dash-scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+@keyframes glow-shift {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.1); }
 }
 
-.ticker-wrap {
-  width: 100%;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 8px 0;
-}
-
-.ticker-content {
-  display: flex;
-  white-space: nowrap;
-  animation: dash-scroll 20s linear infinite;
-}
-
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 3px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+  animation: glow-shift 8s ease-in-out infinite;
+  z-index: -1;
 }
