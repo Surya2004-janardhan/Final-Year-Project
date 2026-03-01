@@ -2,12 +2,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-deep: #020202;
-  --color-glass-surface: rgba(255, 255, 255, 0.03);
-  --color-glass-border: rgba(255, 255, 255, 0.1);
+  --color-bg-deep: #000000;
+  --color-glass-surface: rgba(255, 255, 255, 0.02);
+  --color-glass-border: rgba(255, 255, 255, 0.05);
   --color-text-bright: #ffffff;
-  --color-text-dim: #a1a1aa;
-  --color-text-muted: #4b4b4b;
+  --color-text-dim: #71717a;
+  --color-text-muted: #3f3f46;
 }
 
 :root {
@@ -23,71 +23,126 @@ body {
   overflow-x: hidden;
 }
 
-/* Enhanced Glassmorphism */
-.glass-surface {
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(60px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 32px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+/* ──────────────────────────────────────────────────────────────────────────
+   HIGH-END DECORATIVE ELEMENTS (The "Fancy Things")
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Noise texture for organic dark depth */
+.bg-noise {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
 
-.glass-card {
+/* Mathematical Grid with intersection "plus" markers */
+.bg-graticule {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -20;
+  background-image: 
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
+  background-size: 80px 80px;
+}
+
+/* Moving Light Orbs */
+@keyframes orb-move {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.1; }
+  33% { transform: translate(100px, 50px) scale(1.2); opacity: 0.2; }
+  66% { transform: translate(-50px, 150px) scale(0.9); opacity: 0.15; }
+}
+
+.float-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(140px);
+  background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+  animation: orb-move 20s ease-in-out infinite;
+  z-index: -10;
+  pointer-events: none;
+}
+
+/* Etched Corner Markers for glass panels */
+.etched-corners {
+  position: relative;
+}
+
+.etched-corners::before,
+.etched-corners::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+}
+
+.etched-corners::before { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
+.etched-corners::after { bottom: 12px; right: 12px; border-left: 0; border-top: 0; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   COMPONENTS
+   ────────────────────────────────────────────────────────────────────────── */
+
+.glass-panel {
   background: rgba(255, 255, 255, 0.015);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(20px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 32px;
+  transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.glass-card:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-4px);
-  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+.glass-panel:hover {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Loader Styles */
-.loader-bar {
-  height: 2px;
+/* Clean Horizontal Loader */
+.progress-container {
+  width: 100%;
+  height: 1px;
   background: rgba(255, 255, 255, 0.05);
   position: relative;
   overflow: hidden;
-  border-radius: 4px;
 }
 
-.loader-progress {
+.progress-bar-fill {
   position: absolute;
   top: 0;
   left: 0;
   height: 100%;
-  background: white;
-  transition: width 0.3s ease;
+  background: #ffffff;
+  box-shadow: 0 0 15px #ffffff;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Background Graticule */
-.bg-mesh {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image: 
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 100px 100px;
-  opacity: 0.6;
-}
-
-/* Animations */
-@keyframes glow-shift {
-  0%, 100% { opacity: 0.2; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(1.1); }
-}
-
-.glow-orb {
+.progress-shimmer {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
-  animation: glow-shift 8s ease-in-out infinite;
-  z-index: -1;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 200px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: shimmer-swipe 1.5s linear infinite;
+}
+
+@keyframes shimmer-swipe {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(500%); }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 2px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
 }
