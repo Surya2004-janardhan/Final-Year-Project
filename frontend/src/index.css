@@ -1,28 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 /* ========================================
-   NUANCE BEIGE & GALLERY SLATE (2026)
-   Sophisticated, Nordic, Minimalist
+   CLAUDE-INSPIRED LIGHT THEME (2026)
+   Minimal, Sophisticated, Text-First
    ======================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=Outfit:wght@100..900&family=Space+Grotesk:wght@300..700&display=swap');
+/* Using Georgia/Charter fallback for serif */
 
-:root {
-  /* Nuance Palette */
-  --bg-beige: #f8f7f2;
-  --bg-accent: #f2f0e4;
-  --bg-yellow: #fffdf2;
+@theme {
+  --color-bg-main: #fbfaf8;
+  --color-bg-sidebar: #f5f2ed;
+  --color-bg-clay: #efebe4;
   
-  --slate-darkest: #1a1c1e;
-  --slate-grey: #4a4d50;
-  --slate-light: #8e9296;
+  --color-text-main: #111827;
+  --color-text-secondary: #374151;
+  --color-text-muted: #6b7280;
   
-  --accent-gold: #d4af37;
+  --color-border-subtle: #e5e7eb;
+  --color-border-strong: #d1d5db;
   
-  /* Paper-Morphism */
-  --paper-bg: rgba(255, 255, 255, 0.7);
-  --paper-border: rgba(0, 0, 0, 0.08);
-  --paper-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+  --color-accent-orange: #d97706;
+  --color-accent-teal: #059669;
 }
 
 /* ========================================
@@ -35,17 +34,11 @@
   box-sizing: border-box;
 }
 
-html {
-  overflow-y: auto !important;
-  height: auto !important;
-}
-
 body {
-  font-family: 'Outfit', sans-serif;
-  background-color: var(--bg-beige);
-  color: var(--slate-darkest);
-  line-height: 1.5;
-  overflow-x: hidden;
+  font-family: 'Inter', -apple-system, sans-serif;
+  background-color: var(--color-bg-main);
+  color: var(--color-text-main);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -54,15 +47,14 @@ body {
    ======================================== */
 
 h1, h2, h3, h4 {
-  font-family: 'Space Grotesk', sans-serif;
-  letter-spacing: -0.05em;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.02em;
   font-weight: 700;
-  color: var(--slate-darkest);
+  color: var(--color-text-main);
 }
 
 .font-serif-luxe {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
+  font-family: 'Charter', 'Georgia', serif;
 }
 
 /* ========================================
@@ -70,27 +62,25 @@ h1, h2, h3, h4 {
    ======================================== */
 
 .gallery-card {
-  background: var(--paper-bg);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--paper-border);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: var(--paper-shadow);
-  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease;
+  background: white;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
 }
 
 .gallery-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.1);
-  border-color: rgba(0, 0, 0, 0.15);
+  border-color: var(--color-border-strong);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .bento-container {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 1.25rem;
+  gap: 1.5rem;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 2rem;
 }
@@ -101,41 +91,33 @@ h1, h2, h3, h4 {
 
 .btn-nordic {
   position: relative;
-  background: var(--slate-darkest);
-  color: #fff;
-  padding: 0.875rem 1.75rem;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.9375rem;
+  background: white;
+  color: var(--color-text-main);
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  transition: all 0.3s ease;
-  border: none;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  border: 1px solid var(--color-border-strong);
   cursor: pointer;
 }
 
 .btn-nordic:hover:not(:disabled) {
-  background: #000;
-  transform: scale(1.02);
-  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.4);
+  background: var(--color-bg-sidebar);
+  border-color: #999;
 }
 
 .btn-nordic:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .btn-outline {
-  background: transparent;
-  border: 1px solid var(--paper-border);
-  color: var(--slate-darkest);
-}
-
-.btn-outline:hover:not(:disabled) {
-  background: var(--bg-accent);
-  border-color: var(--slate-grey);
+  border-style: dashed;
 }
 
 /* ========================================
@@ -144,27 +126,17 @@ h1, h2, h3, h4 {
 
 .loading-bar-container {
   width: 100%;
-  height: 4px;
-  background: var(--bg-accent);
+  height: 6px;
+  background: var(--color-bg-clay);
   border-radius: 10px;
   overflow: hidden;
-  margin-top: 1.5rem;
+  margin-top: 1rem;
 }
 
 .loading-bar-fill {
   height: 100%;
-  background: var(--slate-darkest);
+  background: var(--color-text-main);
   transition: width 0.4s ease;
-}
-
-.pulse-subtle {
-  animation: pulse-gallery 2s infinite ease-in-out;
-}
-
-@keyframes pulse-gallery {
-  0% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(0.98); }
-  100% { opacity: 1; transform: scale(1); }
 }
 
 /* ========================================
@@ -174,39 +146,23 @@ h1, h2, h3, h4 {
 .emotion-blob {
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 40% 60% 60% 40% / 40% 40% 60% 60%;
-  background: var(--bg-accent);
+  border-radius: 50%;
+  background: var(--color-bg-clay);
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 1s ease;
-}
-
-/* ========================================
-   BACKGROUND NOISE
-   ======================================== */
-
-.noise-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  opacity: 0.03;
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ========================================
    UTILITIES
    ======================================== */
 
-.text-subtle {
-  color: var(--slate-grey);
-}
-
 .uppercase-tracking {
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  font-weight: 700;
-  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
 }
