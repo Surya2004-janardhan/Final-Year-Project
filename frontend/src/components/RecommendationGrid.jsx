@@ -1,53 +1,19 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { ExternalLink, Play } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ExternalLink, Play, Music, Youtube } from 'lucide-react';
 
-const RecommendationGrid = ({ songs, video, healthInfo }) => {
+const RecommendationGrid = ({ songs, video }) => {
   return (
-    <div className="flex flex-col gap-12 w-full max-w-4xl mx-auto py-16">
+    <div className="flex flex-col gap-12 w-full max-w-5xl mx-auto py-24 px-8 border-t border-gray-100 mt-24">
       <div className="flex flex-col gap-2">
-        <span className="text-label">Analysis Synthesis</span>
-        <h3 className="text-xl font-bold">Recommendations & Guidance</h3>
+        <span className="text-[10px] uppercase font-bold tracking-[0.5em] text-gray-400">Curated Intelligence</span>
+        <h3 className="text-3xl font-bold tracking-tight">Curation Grid</h3>
       </div>
 
-      {healthInfo && (
-        <div className="grid md:grid-cols-2 gap-8">
-           {/* Medical Guidance */}
-           <div className="space-y-6">
-              <div className="p-6 bg-white border border-accent-sage rounded-xl shadow-sm">
-                <span className="text-label lowercase italic">Medical Treatments</span>
-                <p className="text-sm mt-2 text-text-ink/80">{healthInfo.treatments}</p>
-                <div className="mt-4 pt-4 border-t border-accent-sage/10">
-                   <span className="text-label lowercase italic">Cost in India</span>
-                   <p className="text-sm text-text-ink font-bold">{healthInfo.costs_india}</p>
-                </div>
-              </div>
-
-              <div className="p-6 bg-stone-50 border border-accent-sage/50 rounded-xl">
-                 <span className="text-label lowercase italic text-accent-sage">Support & Medicine</span>
-                 <p className="text-[11px] leading-relaxed mt-2 text-text-ink/70 italic">{healthInfo.medicine}</p>
-              </div>
-           </div>
-
-           {/* Diet & Exercise */}
-           <div className="space-y-6">
-              <div className="p-6 bg-white border border-accent-stroke rounded-xl border-accent-sage">
-                 <span className="text-label lowercase italic">Dietary Lifestyle</span>
-                 <p className="text-sm mt-2 font-medium text-text-ink/90">{healthInfo.diet}</p>
-              </div>
-              
-              <div className="p-6 bg-white border border-accent-stroke rounded-xl border-accent-sage">
-                 <span className="text-label lowercase italic">Exercises & Yoga</span>
-                 <p className="text-sm mt-2 text-text-ink/80">{healthInfo.exercise}</p>
-              </div>
-           </div>
-        </div>
-      )}
-
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Songs Column */}
-        <div className="space-y-4">
-          <span className="text-label lowercase italic">Healing Sounds</span>
+      <div className="grid lg:grid-cols-2 gap-12">
+        {/* Songs Column - Clean Text List Like Substack/Scientific Journal */}
+        <div className="space-y-6">
+          <span className="text-[11px] uppercase font-extrabold text-black/20 tracking-widest block mb-4 italic">Audio Recommendations</span>
           <div className="space-y-4">
             {songs?.length > 0 ? (
               songs.map((song, i) => (
@@ -56,49 +22,63 @@ const RecommendationGrid = ({ songs, video, healthInfo }) => {
                   href={song.link}
                   target="_blank"
                   rel="noreferrer"
-                  className="block p-4 bg-white border border-accent-sage rounded-xl hover:border-text-ink transition-all group"
+                  className="block p-6 bg-white border border-gray-100 rounded-2xl hover:border-black transition-all group shadow-sm hover:shadow-lg"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold">{song.title}</span>
-                      <span className="text-[10px] uppercase tracking-widest opacity-40">{song.artist}</span>
+                    <div className="flex items-center gap-6">
+                      <div className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 group-hover:bg-black group-hover:border-black transition-all">
+                        <Music className="w-4 h-4 text-gray-400 group-hover:text-white" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-base font-bold text-gray-900 group-hover:underline">{song.title}</span>
+                        <span className="text-[12px] uppercase tracking-widest text-gray-400 font-bold group-hover:text-black/40 transition-colors">{song.artist}</span>
+                      </div>
                     </div>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-text-ink/40" />
+                    <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-300" />
                   </div>
                 </a>
               ))
             ) : (
-              <div className="p-8 border-2 border-dashed border-accent-sage/20 rounded-xl text-center">
-                <span className="text-label text-[10px]">Data incoming...</span>
+              <div className="p-10 border border-dashed border-gray-200 rounded-2xl text-center bg-gray-50/50">
+                <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-gray-300">Data awaiting synthesis</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Video Column */}
-        <div className="space-y-4">
-          <span className="text-label lowercase italic">Educational Care</span>
+        {/* Video Column - Clean Geometric Grid */}
+        <div className="space-y-6">
+          <span className="text-[11px] uppercase font-extrabold text-black/20 tracking-widest block mb-4 italic">Video Insights</span>
           {video ? (
             <a
               href={video.link || 'https://youtube.com'}
               target="_blank"
               rel="noreferrer"
-              className="block bg-white border border-accent-sage rounded-xl overflow-hidden group hover:border-text-ink transition-all aspect-[16/10] relative"
+              className="block bg-gray-50 border border-gray-100 rounded-3xl overflow-hidden group hover:border-black transition-all aspect-[16/10] relative shadow-sm hover:shadow-2xl"
             >
-               <div className="absolute inset-0 bg-stone-100" />
+               <div className="absolute inset-0 bg-white" />
+               
+               {/* Minimal Center Icon */}
                <div className="absolute inset-0 flex items-center justify-center">
-                 <div className="w-12 h-12 rounded-full border border-text-ink/10 flex items-center justify-center">
-                   <Play className="w-4 h-4 text-text-ink" />
+                 <div className="w-16 h-16 rounded-full border border-black/5 bg-white/80 backdrop-blur-md flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                   <Play className="w-6 h-6 text-black fill-black/10" />
                  </div>
                </div>
-               <div className="absolute bottom-6 left-6 right-6 flex flex-col gap-1 px-2">
-                 <h5 className="text-sm font-bold italic underline decoration-accent-sage underline-offset-4 line-clamp-1">{video.title || "Eye Care Guide"}</h5>
-                 <span className="text-[10px] opacity-40 uppercase tracking-widest font-bold">Watch Visual Explanation</span>
+               
+               {/* Details Bottom Overlay */}
+               <div className="absolute bottom-8 left-8 right-8 flex flex-col gap-3 group-hover:translate-y-[-4px] transition-transform">
+                 <div className="flex items-center gap-2">
+                   <Youtube className="w-4 h-4 text-gray-300 group-hover:text-red-500 transition-colors" />
+                   <span className="text-[10px] uppercase tracking-widest font-bold text-gray-300 group-hover:text-black/40 transition-colors">Visual Resonance Sequence</span>
+                 </div>
+                 <h5 className="text-xl font-bold tracking-tight text-gray-900 leading-tight italic underline decoration-gray-200 underline-offset-8 group-hover:decoration-black transition-all">
+                   {video.title || "Reflective Synthesis Guide"}
+                 </h5>
                </div>
             </a>
           ) : (
-             <div className="aspect-[16/10] border-2 border-dashed border-accent-sage/20 rounded-xl flex items-center justify-center">
-                <span className="text-label text-[10px]">Awaiting visual data...</span>
+             <div className="aspect-[16/10] border border-dashed border-gray-200 rounded-2xl flex items-center justify-center bg-gray-50/50">
+                <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-gray-300">Visual telemetry pending</span>
              </div>
           )}
         </div>
