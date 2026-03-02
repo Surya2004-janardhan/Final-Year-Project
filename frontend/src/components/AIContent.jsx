@@ -186,7 +186,18 @@ export default function AIContent({ results }) {
               <Play className="w-4 h-4" />
               <span className="text-xs font-semibold uppercase tracking-wider">Watch This</span>
             </div>
-            {extractYTId(videoObj.link) && <YouTubeEmbed url={videoObj.link} title={videoObj.title} />}
+            {/* Embed if we have a valid video ID, otherwise show link card */}
+            {extractYTId(videoObj.link) ? (
+              <YouTubeEmbed url={videoObj.link} title={videoObj.title} />
+            ) : videoObj.link && videoObj.link !== '#' ? (
+              <a href={videoObj.link} target="_blank" rel="noopener noreferrer"
+                className="block rounded-xl p-4 text-center transition-all hover:scale-[1.01]"
+                style={{ background: 'rgba(213,207,47,0.06)', border: '1px solid rgba(213,207,47,0.12)' }}
+              >
+                <Play className="w-8 h-8 text-wattle mx-auto mb-2" />
+                <span className="text-sm text-wattle font-medium">Watch on YouTube →</span>
+              </a>
+            ) : null}
             <div className="space-y-1">
               {videoObj.title && <p className="text-sm text-text-primary font-medium">{videoObj.title}</p>}
               {videoObj.channel && <p className="text-[11px] text-text-muted">by {videoObj.channel}</p>}

@@ -167,11 +167,11 @@ Please generate highly personalized content that directly relates to this specif
 
 2. An inspirational quote specifically tailored to someone experiencing this emotion.
 
-3. A YouTube video recommendation as an object with keys: title, channel, link (a real YouTube URL), and reason (why it helps).
+3. A YouTube video recommendation as an object with keys: title, channel, link (use this exact format: https://www.youtube.com/results?search_query=SEARCH+TERMS — replace spaces with + signs, DO NOT invent video IDs), and reason (why it helps).
 
 4. 2-3 short book recommendations as an array of objects with keys: title, author, and reason (why it suits this emotional state). Pick well-known, accessible books.
 
-5. 3-4 song recommendations with specific artist names, song titles, streaming links, and brief explanations.
+5. 2-3 song recommendations with specific artist names, song titles, and brief explanations. For the link field, use YouTube search format: https://www.youtube.com/results?search_query=ARTIST+TITLE (replace spaces with +).
 
 Format the response as valid JSON with keys: story, quote, video (object with title/channel/link/reason), books (array of objects with title/author/reason), songs (array of objects with artist/title/link/explanation).
 Ensure the content is empathetic, supportive, and directly addresses the detected emotional state and cognitive insights.
