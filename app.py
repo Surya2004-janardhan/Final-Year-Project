@@ -152,7 +152,7 @@ def cognitive_reasoning(audio_emotion, video_emotion, fused_emotion, audio_preds
     return " ".join(reasoning)
 
 def generate_llm_content(fused_emotion, reasoning, audio_temporal, video_temporal):
-    """Generate personalized story, quote, video, and songs using Groq LLM."""
+    """Generate personalized story, quote, video, books, and songs using Groq LLM."""
     prompt = f"""
 Based on the emotion analysis results:
 
@@ -165,13 +165,15 @@ Please generate highly personalized content that directly relates to this specif
 
 1. A personalized story (approximately 200 words) that captures the emotional journey shown in the timeline and explains the fusion result. Make it detailed and narrative-rich.
 
-2. An inspirational quote specifically tailored to someone experiencing this emotion, considering the cognitive analysis insights.
+2. An inspirational quote specifically tailored to someone experiencing this emotion.
 
-3. A YouTube video recommendation with DIRECT LINK (https://www.youtube.com/watch?v=VIDEO_ID), specific title, creator/channel, and detailed explanation of why it would help someone in this emotional state.
+3. A YouTube video recommendation as an object with keys: title, channel, link (a real YouTube URL), and reason (why it helps).
 
-4. 3-4 song recommendations that are currently popular/relevant (2024-2025 era), with specific artist names, song titles, DIRECT STREAMING LINKS (Spotify, YouTube Music, or Apple Music), and brief explanations of why each song matches this emotional profile.
+4. 2-3 short book recommendations as an array of objects with keys: title, author, and reason (why it suits this emotional state). Pick well-known, accessible books.
 
-Format the response as valid JSON with keys: story, quote, video, songs (as array of objects with artist, title, link, explanation).
+5. 3-4 song recommendations with specific artist names, song titles, streaming links, and brief explanations.
+
+Format the response as valid JSON with keys: story, quote, video (object with title/channel/link/reason), books (array of objects with title/author/reason), songs (array of objects with artist/title/link/explanation).
 Ensure the content is empathetic, supportive, and directly addresses the detected emotional state and cognitive insights.
 """
     try:
@@ -218,65 +220,51 @@ def generate_fallback_content(fused_emotion):
         'happy': {
             'story': 'A luminous joy radiated through the atmosphere as the soul expressed pure exuberance. The temporal patterns reveal a steady ascent into a state of genuine contentment and radiant positivity.',
             'quote': '"To be happy is to be able to become aware of oneself without fright." — Walter Benjamin',
-            'video': 'https://www.youtube.com/watch?v=k0GQSJrpVhM "The Science of Happiness" by PsycSpace - A deep dive into the neurological foundations of joy.',
-            'songs': [
-                {'artist': 'Pharrell Williams', 'title': 'Happy', 'link': 'https://open.spotify.com/track/60nZcImuRpwqvhoqzY6DkC', 'explanation': 'An quintessential anthem of pure, unadulterated joy.'},
-                {'artist': 'Coldplay', 'title': 'A Sky Full of Stars', 'link': 'https://open.spotify.com/track/0FDm920U779LdvC0p2H4v0', 'explanation': 'A vibrant sonic landscape matching elevated emotional states.'}
-            ]
+            'video': {'title': 'The Science of Happiness', 'channel': 'PsycSpace', 'link': 'https://www.youtube.com/watch?v=k0GQSJrpVhM', 'reason': 'A deep dive into the neurological foundations of joy.'},
+            'books': [{'title': 'The Happiness Project', 'author': 'Gretchen Rubin', 'reason': 'Practical strategies for cultivating daily joy.'}, {'title': 'Flow', 'author': 'Mihaly Csikszentmihalyi', 'reason': 'Understanding the psychology of optimal experience.'}],
+            'songs': [{'artist': 'Pharrell Williams', 'title': 'Happy', 'link': 'https://open.spotify.com/track/60nZcImuRpwqvhoqzY6DkC', 'explanation': 'An anthem of pure, unadulterated joy.'}, {'artist': 'Coldplay', 'title': 'A Sky Full of Stars', 'link': 'https://open.spotify.com/track/0FDm920U779LdvC0p2H4v0', 'explanation': 'A vibrant sonic landscape matching elevated emotional states.'}]
         },
         'sad': {
             'story': 'A quiet melancholy permeated the recording, characterized by introspective pauses and a tender vulnerability. The emotional arc suggests a profound depth of feeling and reflective sorrow.',
             'quote': '"There is no greater sorrow than to recall in misery the time when we were happy." — Dante Alighieri',
-            'video': 'https://www.youtube.com/watch?v=vV_5X_8oPBM "The Art of Sadness" by The School of Life - Exploring the beauty and necessity of our darker moods.',
-            'songs': [
-                {'artist': 'Adele', 'title': 'Someone Like You', 'link': 'https://open.spotify.com/track/15077jNn9m5b5l9a', 'explanation': 'A masterful expression of longing and emotional processing.'},
-                {'artist': 'Bon Iver', 'title': 'Holocene', 'link': 'https://open.spotify.com/track/4fbvS168v79H9u6S', 'explanation': 'Reflective and atmospheric tracks for moments of deep contemplation.'}
-            ]
+            'video': {'title': 'The Art of Sadness', 'channel': 'The School of Life', 'link': 'https://www.youtube.com/watch?v=vV_5X_8oPBM', 'reason': 'Exploring the beauty and necessity of our darker moods.'},
+            'books': [{'title': 'When Things Fall Apart', 'author': 'Pema Chödrön', 'reason': 'Finding peace in impermanence and difficulty.'}, {'title': 'Man\'s Search for Meaning', 'author': 'Viktor Frankl', 'reason': 'Discovering purpose through suffering.'}],
+            'songs': [{'artist': 'Adele', 'title': 'Someone Like You', 'link': 'https://open.spotify.com/track/15077jNn9m5b5l9a', 'explanation': 'A masterful expression of longing and emotional processing.'}, {'artist': 'Bon Iver', 'title': 'Holocene', 'link': 'https://open.spotify.com/track/4fbvS168v79H9u6S', 'explanation': 'Reflective and atmospheric for moments of deep contemplation.'}]
         },
         'angry': {
             'story': 'A surge of intense energy was detected, manifesting in sharp vocal modulations and forceful expressions. This visceral reaction reflects a powerful stand against perceived injustice or frustration.',
             'quote': '"For every minute you are angry you lose sixty seconds of happiness." — Ralph Waldo Emerson',
-            'video': 'https://www.youtube.com/watch?v=S0uA56nE8p0 "Managing the Fire Within" - TED Talk on channeling anger into constructive action.',
-            'songs': [
-                {'artist': 'Linkin Park', 'title': 'In the End', 'link': 'https://open.spotify.com/track/60077jNn9m5b5l9a', 'explanation': 'A rhythmic outlet for complex frustrations and emotional release.'},
-                {'artist': 'Rage Against the Machine', 'title': 'Killing in the Name', 'link': 'https://open.spotify.com/track/59077jNn9m5b5l9a', 'explanation': 'Raw energy to match internal emotional intensity.'}
-            ]
+            'video': {'title': 'Managing the Fire Within', 'channel': 'TED', 'link': 'https://www.youtube.com/watch?v=S0uA56nE8p0', 'reason': 'Channeling anger into constructive action.'},
+            'books': [{'title': 'Anger', 'author': 'Thich Nhat Hanh', 'reason': 'Mindful approaches to transforming anger.'}, {'title': 'The Dance of Anger', 'author': 'Harriet Lerner', 'reason': 'Positive patterns for expressing anger constructively.'}],
+            'songs': [{'artist': 'Linkin Park', 'title': 'In the End', 'link': 'https://open.spotify.com/track/60077jNn9m5b5l9a', 'explanation': 'A rhythmic outlet for complex frustrations.'}, {'artist': 'Rage Against the Machine', 'title': 'Killing in the Name', 'link': 'https://open.spotify.com/track/59077jNn9m5b5l9a', 'explanation': 'Raw energy to match internal intensity.'}]
         },
         'fearful': {
             'story': 'A sense of cautious trepidation was observed, with signals suggesting high vigilance and internal tension. The timeline indicates a journey through uncertainty toward a search for security.',
             'quote': '"The only thing we have to fear is fear itself." — Franklin D. Roosevelt',
-            'video': 'https://www.youtube.com/watch?v=yW6zK-N-x9U "Overcoming the Unknown" by Breathwork - Techniques for grounding in moments of fear.',
-            'songs': [
-                {'artist': 'Taylor Swift', 'title': 'Fearless', 'link': 'https://open.spotify.com/track/12077jNn9m5b5l9a', 'explanation': 'A reminder of the courage that exists within every heartbeat.'},
-                {'artist': 'Florence + The Machine', 'title': 'Shake It Out', 'link': 'https://open.spotify.com/track/30077jNn9m5b5l9a', 'explanation': 'A rhythmic exorcism of lingering anxieties.'}
-            ]
+            'video': {'title': 'Overcoming the Unknown', 'channel': 'Breathwork', 'link': 'https://www.youtube.com/watch?v=yW6zK-N-x9U', 'reason': 'Techniques for grounding in moments of fear.'},
+            'books': [{'title': 'Feel the Fear and Do It Anyway', 'author': 'Susan Jeffers', 'reason': 'Practical guide to moving through fear.'}, {'title': 'The Gift of Fear', 'author': 'Gavin de Becker', 'reason': 'Understanding how fear protects us.'}],
+            'songs': [{'artist': 'Taylor Swift', 'title': 'Fearless', 'link': 'https://open.spotify.com/track/12077jNn9m5b5l9a', 'explanation': 'A reminder of courage within every heartbeat.'}, {'artist': 'Florence + The Machine', 'title': 'Shake It Out', 'link': 'https://open.spotify.com/track/30077jNn9m5b5l9a', 'explanation': 'A rhythmic exorcism of lingering anxieties.'}]
         },
         'neutral': {
             'story': 'A state of exquisite equilibrium and stoic poise was maintained throughout the session. The stability of the signals reflects a centered consciousness and professional restraint.',
             'quote': '"Nothing diminishes anxiety faster than action." — Walter Richard Sickert',
-            'video': 'https://www.youtube.com/watch?v=m8rRzTtP7Tc "The Power of Stillness" - A meditation on the benefits of emotional neutrality.',
-            'songs': [
-                {'artist': 'Ludovico Einaudi', 'title': 'Nuvole Bianche', 'link': 'https://open.spotify.com/track/33077jNn9m5b5l9a', 'explanation': 'Pianistic perfection for maintaining centered focus.'},
-                {'artist': 'Air', 'title': 'Alone in Kyoto', 'link': 'https://open.spotify.com/track/44077jNn9m5b5l9a', 'explanation': 'Minimalist atmosphere for calm contemplation.'}
-            ]
+            'video': {'title': 'The Power of Stillness', 'channel': 'Mindfulness', 'link': 'https://www.youtube.com/watch?v=m8rRzTtP7Tc', 'reason': 'The benefits of emotional neutrality.'},
+            'books': [{'title': 'The Power of Now', 'author': 'Eckhart Tolle', 'reason': 'Embracing present-moment awareness.'}, {'title': 'Stillness Is the Key', 'author': 'Ryan Holiday', 'reason': 'Finding calm in a chaotic world.'}],
+            'songs': [{'artist': 'Ludovico Einaudi', 'title': 'Nuvole Bianche', 'link': 'https://open.spotify.com/track/33077jNn9m5b5l9a', 'explanation': 'Pianistic perfection for centered focus.'}, {'artist': 'Air', 'title': 'Alone in Kyoto', 'link': 'https://open.spotify.com/track/44077jNn9m5b5l9a', 'explanation': 'Minimalist atmosphere for calm contemplation.'}]
         },
         'surprised': {
             'story': 'A sudden rupture in the expected emotional flow led to a state of dynamic astonishment. The high-intensity peaks indicate a genuine reaction to the unexpected and the marvelous.',
             'quote': '"The world is full of magic things, patiently waiting for our senses to grow sharper." — W.B. Yeats',
-            'video': 'https://www.youtube.com/watch?v=8Lz_qPv_898 "The Architecture of Awe" - Understanding the psychology of surprise.',
-            'songs': [
-                {'artist': 'Post Malone', 'title': 'Wow.', 'link': 'https://open.spotify.com/track/55077jNn9m5b5l9a', 'explanation': 'A contemporary celebration of the unexpected.'},
-                {'artist': 'Electric Light Orchestra', 'title': 'Mr. Blue Sky', 'link': 'https://open.spotify.com/track/66077jNn9m5b5l9a', 'explanation': 'A sudden burst of sonic light and wonder.'}
-            ]
+            'video': {'title': 'The Architecture of Awe', 'channel': 'Psychology Today', 'link': 'https://www.youtube.com/watch?v=8Lz_qPv_898', 'reason': 'Understanding the psychology of surprise.'},
+            'books': [{'title': 'Stumbling on Happiness', 'author': 'Daniel Gilbert', 'reason': 'How our minds trick us about what makes us happy.'}, {'title': 'The Unexpected', 'author': 'Maria Konnikova', 'reason': 'The science of surprises and wonder.'}],
+            'songs': [{'artist': 'Post Malone', 'title': 'Wow.', 'link': 'https://open.spotify.com/track/55077jNn9m5b5l9a', 'explanation': 'A celebration of the unexpected.'}, {'artist': 'Electric Light Orchestra', 'title': 'Mr. Blue Sky', 'link': 'https://open.spotify.com/track/66077jNn9m5b5l9a', 'explanation': 'A burst of sonic light and wonder.'}]
         },
         'disgust': {
             'story': 'A visceral sense of aversion was detected, manifesting as a sharp withdrawal from the stimulus. The analysis suggests a strong internal boundary being established.',
             'quote': '"Disgust is the visceral realization that we have a standard." — Anonymous',
-            'video': 'https://www.youtube.com/watch?v=O1_qPV7X9Yw "The Evolution of Aversion" - Why we feel disgust and how to transcend it.',
-            'songs': [
-                {'artist': 'Britney Spears', 'title': 'Toxic', 'link': 'https://open.spotify.com/track/77077jNn9m5b5l9a', 'explanation': 'Recognizing and labeling that which we find disagreeable.'},
-                {'artist': 'Lorde', 'title': 'Pure Heroine', 'link': 'https://open.spotify.com/track/88077jNn9m5b5l9a', 'explanation': 'Subtle disdain for the mundane aspects of stimuli.'}
-            ]
+            'video': {'title': 'The Evolution of Aversion', 'channel': 'Psych2Go', 'link': 'https://www.youtube.com/watch?v=O1_qPV7X9Yw', 'reason': 'Why we feel disgust and how to transcend it.'},
+            'books': [{'title': 'Radical Acceptance', 'author': 'Tara Brach', 'reason': 'Embracing life with compassion.'}, {'title': 'The Upside of Your Dark Side', 'author': 'Todd Kashdan', 'reason': 'Finding value in uncomfortable emotions.'}],
+            'songs': [{'artist': 'Britney Spears', 'title': 'Toxic', 'link': 'https://open.spotify.com/track/77077jNn9m5b5l9a', 'explanation': 'Recognizing what we find disagreeable.'}, {'artist': 'Lorde', 'title': 'Pure Heroine', 'link': 'https://open.spotify.com/track/88077jNn9m5b5l9a', 'explanation': 'Subtle disdain for the mundane.'}]
         }
     }
 
@@ -471,6 +459,10 @@ def process():
             video_emotions_temporal
         )
 
+        # Build probability arrays for smooth temporal charts
+        audio_probs = audio_preds.tolist() if len(audio_preds) > 0 else []
+        video_probs = video_preds.tolist() if len(video_preds) > 0 else []
+
         final_result = {
             'audio_emotion': Counter(audio_emotions_temporal).most_common(1)[0][0] if audio_emotions_temporal else None,
             'video_emotion': timeline_dominant_emotion,
@@ -479,9 +471,12 @@ def process():
             'story': llm_content.get('story', ''),
             'quote': llm_content.get('quote', ''),
             'video': llm_content.get('video', ''),
+            'books': llm_content.get('books', []),
             'songs': llm_content.get('songs', []),
             'audio_temporal': audio_emotions_temporal,
             'video_temporal': video_emotions_temporal,
+            'audio_probs_temporal': audio_probs,
+            'video_probs_temporal': video_probs,
             'time_points': list(range(len(combined_emotions))),
             'timeline_confidence': float(timeline_confidence),
             'emotional_stability': float(emotional_stability),
