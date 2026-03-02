@@ -497,6 +497,29 @@ def process():
         progress_state["status"] = f"Error: {str(e)}"
         return jsonify({'error': str(e)})
 
+@app.route('/music/search', methods=['GET'])
+def music_search():
+    """Search Deezer for a song and return preview URL (free, no API key)."""
+    try:
+        q = request.args.get('q', '')
+        if not q:
+            return jsonify({'error': 'No query'}), 400
+        resp = requests.get(f'https://api.deezer.com/search?q={q}&limit=1')
+        if resp.status_code == 200:
+            data = resp.json().get('data', [])
+            if data:
+                track = data[0]
+                return jsonify({
+                    'title': track.get('title', ''),
+                    'artist': track.get('artist', {}).get('name', ''),
+                    'preview': track.get('preview', ''),
+                    'album_art': track.get('album', {}).get('cover_medium', ''),
+                    'duration': track.get('duration', 0),
+                })
+        return jsonify({'error': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/chat', methods=['POST'])
 def chat():
     """Chatbot endpoint — answers questions about analysis results."""
