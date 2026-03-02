@@ -1,38 +1,13 @@
-# Emotion Recognition AI - Frontend
+# React + Vite
 
-React-based frontend for the emotion recognition system with beautiful UI and interactive visualizations.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Features
+Currently, two official plugins are available:
 
-- 🎨 Glassmorphism design with violet theme
-- 📊 Interactive emotion probability charts
-- 🎵 AI-generated music recommendations
-- 📖 Personalized stories and quotes
-- 🎥 YouTube video suggestions
-- 📱 Responsive design
-- ⚡ Real-time processing feedback
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## Tech Stack
-
-- React 19
-- Vite
-- Tailwind CSS
-- Chart.js
-- Lucide Icons
-- Axios
-
-## Getting Started
-
-```bash
-npm install
-npm run dev
-```
-
-## Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
+## React Compiler
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
