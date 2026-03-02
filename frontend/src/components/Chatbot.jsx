@@ -4,7 +4,7 @@ import axios from 'axios';
 
 export default function Chatbot({ results, isOpen, onClose }) {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hi! I\'m your EmotionAI assistant. Ask me anything about your analysis results.' }
+    { role: 'assistant', content: 'Hey there 👋 I\'m your EmotionAI therapist. I\'m here to help you understand your emotional patterns, feel free to ask me anything.' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -54,7 +54,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 w-80 sm:w-96 flex flex-col animate-fade-up" style={{ maxHeight: 'calc(100vh - 6rem)' }}>
-      <div className="glass glow-border rounded-2xl flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100vh - 6rem)', background: 'rgba(94,21,37,0.85)' }}>
+      <div className="glass glow-border rounded-2xl flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100vh - 6rem)', background: 'rgba(54,12,22,0.95)' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(213,207,47,0.1)' }}>
           <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
                     ? 'bg-wattle/15 text-text-primary'
                     : 'text-text-secondary'
                 }`}
-                style={msg.role === 'assistant' ? { background: 'rgba(122,42,61,0.5)' } : {}}
+                style={msg.role === 'assistant' ? { background: 'rgba(122,42,61,0.8)' } : {}}
               >
                 {msg.content}
               </div>
@@ -84,7 +84,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="rounded-xl px-3 py-2 text-xs text-text-muted" style={{ background: 'rgba(122,42,61,0.5)' }}>
+              <div className="rounded-xl px-3 py-2 text-xs text-text-muted" style={{ background: 'rgba(122,42,61,0.8)' }}>
                 <span className="animate-pulse">Thinking...</span>
               </div>
             </div>
@@ -94,7 +94,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
 
         {/* Input */}
         <div className="px-3 pb-3 pt-1">
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(61,14,24,0.6)', border: '1px solid rgba(213,207,47,0.1)' }}>
+          <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(61,14,24,0.9)', border: '1px solid rgba(213,207,47,0.15)' }}>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}

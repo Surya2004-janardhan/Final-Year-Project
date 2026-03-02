@@ -41,11 +41,11 @@ export default function App() {
         <div className="inline-flex items-center gap-2 mb-3">
           <Brain className="w-5 h-5 text-wattle animate-float" />
           <span className="text-xs font-medium text-wattle/70 uppercase tracking-widest">
-            Multimodal Emotion Recognition
+            Multimodal Emotion Recognition with Cognative analysis and AI recommendation system
           </span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-bold text-text-primary tracking-tight">
-          Discover Your <span className="text-wattle">Emotions</span>
+          Emotional <span className="text-wattle">Companion</span>
         </h1>
         <p className="mt-2 text-sm text-text-muted max-w-md mx-auto">
           Upload a video - our AI analyzes audio & visual cues to understand your emotional state.
@@ -55,9 +55,9 @@ export default function App() {
         <div className="mt-4 max-w-xl mx-auto space-y-2">
           <p className="text-[11px] text-text-muted flex items-center justify-center gap-1.5 flex-wrap">
             <Info className="w-3 h-3 text-wattle/50 shrink-0" />
-            System accuracy may vary — trained on 25GB of data. Results are indicative, not diagnostic.
+            System accuracy may vary as the model is trained on 25GB of data. Results are indicative, not diagnostic.
           </p>
-          <p className="text-[11px] text-text-muted leading-relaxed max-w-lg mx-auto">
+          <p className="text-[11px] text-text-muted leading-relaxed max-w-lg mx-auto font-bold">
             The goal of this project is to make machines understand humans in various scenarios.
             The base model can be used for several use cases like HR screening rounds, therapy session analysis,
             customer sentiment monitoring, interview assessment, and more.

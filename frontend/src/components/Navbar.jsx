@@ -17,15 +17,16 @@ export default function Navbar({ chatOpen, onToggleChat }) {
 
         {/* Right */}
         <div className="flex items-center gap-3">
-          <span className="text-xs text-text-muted hidden sm:inline">Team Project — D7</span>
+          <span className="text-xs text-text-muted hidden sm:inline">Team Project - D7</span>
           <button
+          // lets increase the size of chat icon
             onClick={onToggleChat}
-            className={`p-2 rounded-lg transition-all cursor-pointer ${
+            className={`p-2 rounded-lg transition-all cursor-pointer  ${
               chatOpen ? 'bg-wattle/20 text-wattle' : 'text-text-secondary hover:text-wattle'
             }`}
             title="Toggle Chat"
           >
-            <MessageCircle className="w-4.5 h-4.5" />
+            <MessageCircle className="w-5 h-5" />
           </button>
         </div>
       </div>

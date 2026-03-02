@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export default function useMediaRecorder() {
   const [isRecording, setIsRecording] = useState(false);
@@ -10,9 +10,23 @@ export default function useMediaRecorder() {
   const timerRef = useRef(null);
   const videoRef = useRef(null);
 
+  // Keep the video element in sync with the stream whenever stream changes
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  // Callback ref — component calls this when <video> mounts/unmounts
+  const setVideoElement = useCallback((el) => {
+    videoRef.current = el;
+    if (el && stream) {
+      el.srcObject = stream;
+    }
+  }, [stream]);
+
   const requestPermission = useCallback(async () => {
     try {
-      // Request BOTH video and audio in a single stream for mirror + recording
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setStream(s);
       setHasPermission(true);
@@ -47,7 +61,6 @@ export default function useMediaRecorder() {
 
     chunksRef.current = [];
 
-    // Record from the combined video+audio stream
     const recorder = new MediaRecorder(s, { mimeType: 'video/webm;codecs=vp8,opus' });
 
     recorder.ondataavailable = (e) => {
@@ -65,7 +78,7 @@ export default function useMediaRecorder() {
       };
 
       mediaRecorderRef.current = recorder;
-      recorder.start(100); // collect data every 100ms for reliability
+      recorder.start(100);
       setIsRecording(true);
       setCountdown(11);
 
@@ -93,7 +106,7 @@ export default function useMediaRecorder() {
     countdown,
     stream,
     hasPermission,
-    videoRef,
+    videoRef: setVideoElement, // callback ref so mirror works immediately
     requestPermission,
     stopStream,
     startRecording,
