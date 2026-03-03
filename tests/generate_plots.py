@@ -189,87 +189,107 @@ def plot_training_history(model_name, train_acc, val_acc, train_loss, val_loss, 
 
 def plot_confusion_matrix(y_true, y_pred, model_name):
     """Plot confusion matrix heatmap."""
-    cm = confusion_matrix(y_true, y_pred)
-    cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-    fig.suptitle(f'{model_name} — Confusion Matrix', fontsize=15, fontweight='bold', color=COLORS['primary'])
-    
-    # Raw counts
-    sns.heatmap(cm, annot=True, fmt='d', cmap='YlOrRd', xticklabels=EMOTIONS, yticklabels=EMOTIONS,
-                ax=ax1, cbar_kws={'label': 'Count'}, linewidths=0.5, linecolor=COLORS['grid'])
-    ax1.set_xlabel('Predicted')
-    ax1.set_ylabel('Actual')
-    ax1.set_title('Raw Counts')
-    ax1.tick_params(axis='x', rotation=45)
-    ax1.tick_params(axis='y', rotation=0)
-    
-    # Normalized
-    sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='YlOrRd', xticklabels=EMOTIONS, yticklabels=EMOTIONS,
-                ax=ax2, cbar_kws={'label': 'Rate'}, linewidths=0.5, linecolor=COLORS['grid'], vmin=0, vmax=1)
-    ax2.set_xlabel('Predicted')
-    ax2.set_ylabel('Actual')
-    ax2.set_title('Normalized (Per-Class Accuracy)')
-    ax2.tick_params(axis='x', rotation=45)
-    ax2.tick_params(axis='y', rotation=0)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(PLOT_DIR, f'{model_name.lower().replace(" ", "_")}_confusion_matrix.png'), dpi=200, bbox_inches='tight')
-    plt.close()
-    print(f"  ✓ {model_name} confusion matrix saved")
+    try:
+        cm = confusion_matrix(y_true, y_pred, labels=range(7))
+        row_sums = cm.sum(axis=1, keepdims=True)
+        row_sums[row_sums == 0] = 1  # avoid division by zero
+        cm_normalized = cm.astype('float') / row_sums
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+        fig.suptitle(f'{model_name} — Confusion Matrix', fontsize=15, fontweight='bold', color=COLORS['primary'])
+        
+        sns.heatmap(cm, annot=True, fmt='d', cmap='YlOrRd', xticklabels=EMOTIONS, yticklabels=EMOTIONS,
+                    ax=ax1, cbar_kws={'label': 'Count'}, linewidths=0.5, linecolor=COLORS['grid'])
+        ax1.set_xlabel('Predicted')
+        ax1.set_ylabel('Actual')
+        ax1.set_title('Raw Counts')
+        ax1.tick_params(axis='x', rotation=45)
+        ax1.tick_params(axis='y', rotation=0)
+        
+        sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='YlOrRd', xticklabels=EMOTIONS, yticklabels=EMOTIONS,
+                    ax=ax2, cbar_kws={'label': 'Rate'}, linewidths=0.5, linecolor=COLORS['grid'], vmin=0, vmax=1)
+        ax2.set_xlabel('Predicted')
+        ax2.set_ylabel('Actual')
+        ax2.set_title('Normalized (Per-Class Accuracy)')
+        ax2.tick_params(axis='x', rotation=45)
+        ax2.tick_params(axis='y', rotation=0)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'{model_name.lower().replace(" ", "_")}_confusion_matrix.png'), dpi=200, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ {model_name} confusion matrix saved")
+    except Exception as e:
+        print(f"  ⚠ {model_name} confusion matrix error: {e}")
 
 
 def plot_per_class_accuracy(y_true, y_pred, model_name):
     """Plot per-class accuracy bar chart."""
-    cm = confusion_matrix(y_true, y_pred)
-    per_class = cm.diagonal() / cm.sum(axis=1)
-    
-    fig, ax = plt.subplots(figsize=(10, 5))
-    bars = ax.bar(EMOTIONS, per_class, color=EMOTION_COLORS, edgecolor='white', linewidth=0.5, alpha=0.85)
-    
-    for bar, acc in zip(bars, per_class):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
-                f'{acc:.1%}', ha='center', va='bottom', fontsize=10, fontweight='bold', color=COLORS['text'])
-    
-    ax.set_xlabel('Emotion Class')
-    ax.set_ylabel('Accuracy')
-    ax.set_title(f'{model_name} — Per-Class Accuracy', fontweight='bold', color=COLORS['primary'])
-    ax.set_ylim(0, 1.15)
-    ax.grid(axis='y', alpha=0.2)
-    ax.axhline(y=np.mean(per_class), color=COLORS['primary'], linestyle='--', alpha=0.5, label=f'Mean: {np.mean(per_class):.1%}')
-    ax.legend(framealpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(PLOT_DIR, f'{model_name.lower().replace(" ", "_")}_per_class_accuracy.png'), dpi=200, bbox_inches='tight')
-    plt.close()
-    print(f"  ✓ {model_name} per-class accuracy saved")
+    try:
+        cm = confusion_matrix(y_true, y_pred, labels=range(7))
+        row_sums = cm.sum(axis=1)
+        row_sums_safe = np.where(row_sums == 0, 1, row_sums)
+        per_class = cm.diagonal() / row_sums_safe
+        # Mask classes with no samples
+        per_class = np.where(row_sums == 0, 0, per_class)
+        
+        fig, ax = plt.subplots(figsize=(10, 5))
+        bars = ax.bar(EMOTIONS, per_class, color=EMOTION_COLORS, edgecolor='white', linewidth=0.5, alpha=0.85)
+        
+        for bar, acc in zip(bars, per_class):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
+                    f'{acc:.1%}', ha='center', va='bottom', fontsize=10, fontweight='bold', color=COLORS['text'])
+        
+        ax.set_xlabel('Emotion Class')
+        ax.set_ylabel('Accuracy')
+        ax.set_title(f'{model_name} — Per-Class Accuracy', fontweight='bold', color=COLORS['primary'])
+        ax.set_ylim(0, 1.15)
+        ax.grid(axis='y', alpha=0.2)
+        valid_acc = per_class[row_sums > 0]
+        if len(valid_acc) > 0:
+            ax.axhline(y=np.mean(valid_acc), color=COLORS['primary'], linestyle='--', alpha=0.5, label=f'Mean: {np.mean(valid_acc):.1%}')
+        ax.legend(framealpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'{model_name.lower().replace(" ", "_")}_per_class_accuracy.png'), dpi=200, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ {model_name} per-class accuracy saved")
+    except Exception as e:
+        print(f"  ⚠ {model_name} per-class accuracy error: {e}")
 
 
 def plot_roc_curves(y_true, y_pred_probs, model_name):
     """Plot ROC curves for each emotion class."""
-    y_bin = label_binarize(y_true, classes=range(7))
-    
-    fig, ax = plt.subplots(figsize=(9, 7))
-    
-    for i, emotion in enumerate(EMOTIONS):
-        if y_bin[:, i].sum() > 0:
-            fpr, tpr, _ = roc_curve(y_bin[:, i], y_pred_probs[:, i])
-            roc_auc = auc(fpr, tpr)
-            ax.plot(fpr, tpr, color=EMOTION_COLORS[i], linewidth=2, label=f'{emotion} (AUC={roc_auc:.2f})', alpha=0.85)
-    
-    ax.plot([0, 1], [0, 1], color='gray', linestyle='--', alpha=0.5, label='Random (AUC=0.50)')
-    ax.set_xlabel('False Positive Rate')
-    ax.set_ylabel('True Positive Rate')
-    ax.set_title(f'{model_name} — ROC Curves (One-vs-Rest)', fontweight='bold', color=COLORS['primary'])
-    ax.legend(loc='lower right', fontsize=9, framealpha=0.3)
-    ax.grid(True, alpha=0.2)
-    ax.set_xlim(-0.02, 1.02)
-    ax.set_ylim(-0.02, 1.05)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(PLOT_DIR, f'{model_name.lower().replace(" ", "_")}_roc_curves.png'), dpi=200, bbox_inches='tight')
-    plt.close()
-    print(f"  ✓ {model_name} ROC curves saved")
+    try:
+        y_bin = label_binarize(y_true, classes=range(7))
+        # Ensure pred_probs has 7 columns
+        if y_pred_probs.shape[1] < 7:
+            padded = np.zeros((y_pred_probs.shape[0], 7))
+            padded[:, :y_pred_probs.shape[1]] = y_pred_probs
+            y_pred_probs = padded
+        
+        fig, ax = plt.subplots(figsize=(9, 7))
+        
+        for i, emotion in enumerate(EMOTIONS):
+            if y_bin[:, i].sum() > 0 and i < y_pred_probs.shape[1]:
+                fpr, tpr, _ = roc_curve(y_bin[:, i], y_pred_probs[:, i])
+                roc_auc = auc(fpr, tpr)
+                ax.plot(fpr, tpr, color=EMOTION_COLORS[i], linewidth=2, label=f'{emotion} (AUC={roc_auc:.2f})', alpha=0.85)
+        
+        ax.plot([0, 1], [0, 1], color='gray', linestyle='--', alpha=0.5, label='Random (AUC=0.50)')
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate')
+        ax.set_title(f'{model_name} — ROC Curves (One-vs-Rest)', fontweight='bold', color=COLORS['primary'])
+        ax.legend(loc='lower right', fontsize=9, framealpha=0.3)
+        ax.grid(True, alpha=0.2)
+        ax.set_xlim(-0.02, 1.02)
+        ax.set_ylim(-0.02, 1.05)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(PLOT_DIR, f'{model_name.lower().replace(" ", "_")}_roc_curves.png'), dpi=200, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ {model_name} ROC curves saved")
+    except Exception as e:
+        print(f"  ⚠ {model_name} ROC curve error: {e}")
 
 
 def plot_class_distribution(labels, title='Training Data Class Distribution'):
