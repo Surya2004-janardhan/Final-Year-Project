@@ -271,26 +271,47 @@ def generate_fallback_content(fused_emotion):
     return fallbacks.get(fused_emotion, fallbacks['neutral'])
 
 def sample_frames(video_path):
-    """Sample frame sequences from video over time."""
+    """Sample frame sequences from video over time with fallback for missing metadata."""
     cap = cv2.VideoCapture(video_path)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if not cap.isOpened():
+        print(f"ERROR: Could not open video file {video_path}")
+        return None
+
     fps = cap.get(cv2.CAP_PROP_FPS)
-    duration = total_frames / fps if fps > 0 else 0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
-    if total_frames == 0 or duration == 0:
+    # Fallback for WebM/missing metadata
+    if total_frames <= 0 or fps <= 0:
+        print("WEB_METADATA_MISSING: Counting frames manually...")
+        count = 0
+        while True:
+            ret, _ = cap.read()
+            if not ret: break
+            count += 1
+        total_frames = count
+        fps = 30 # Assumption if missing
+        cap.release()
+        cap = cv2.VideoCapture(video_path) # Re-open for sampling
+    
+    duration = total_frames / fps if fps > 0 else 0
+    print(f"Video Stats: {total_frames} frames, {fps} FPS, {duration:.2f}s duration")
+
+    if total_frames == 0:
         cap.release()
         return None
 
     # Sample sequences every VIDEO_WINDOW_SIZE seconds
     sequences = []
-    window_frames = int(VIDEO_WINDOW_SIZE * fps)
-    hop_frames = int(VIDEO_WINDOW_SIZE * fps / 2)  # overlap
+    window_frames = max(1, int(VIDEO_WINDOW_SIZE * fps))
+    hop_frames = max(1, int(VIDEO_WINDOW_SIZE * fps / 2))
     
     for start_frame in range(0, total_frames - window_frames + 1, hop_frames):
         end_frame = start_frame + window_frames
         frames = []
         
-        for frame_idx in range(start_frame, end_frame, max(1, window_frames // NUM_FRAMES)):
+        # Select NUM_FRAMES from this window
+        step = max(1, window_frames // NUM_FRAMES)
+        for frame_idx in range(start_frame, end_frame, step):
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
             if ret:
@@ -328,19 +349,43 @@ def process():
     try:
         # Save uploaded video file
         video_file = request.files['video']
-        video_path = 'temp_video.webm'
+        raw_video_path = 'temp_raw_video.webm'
+        video_path = 'temp_video.mp4'
         audio_path = 'temp_audio.wav'
-        print(f"Saving video file to {video_path}")
-        video_file.save(video_path)
+        
+        print(f"Saving raw video to {raw_video_path}")
+        video_file.save(raw_video_path)
 
-        # Extract audio from video using ffmpeg-python
+        # 1. Normalize Video using FFmpeg (Fixes WebM headers for OpenCV)
+        progress_state["status"] = "Normalizing Video"
+        progress_state["progress"] = 5
+        print("Normalizing video container...")
+        ffmpeg_bin = os.path.join(os.getcwd(), 'ffmpeg.exe') if os.path.exists('ffmpeg.exe') else 'ffmpeg'
+        try:
+            (
+                ffmpeg
+                .input(raw_video_path)
+                .output(video_path, vcodec='libx264', acodec='aac', strict='experimental')
+                .overwrite_output()
+                .run(cmd=ffmpeg_bin, quiet=True)
+            )
+            print("Video normalized successfully")
+        except Exception as e:
+            print(f"Video normalization failed: {e}. Falling back to raw file.")
+            video_path = raw_video_path
+
+        # 2. Extract audio from video
         progress_state["status"] = "Extracting Audio"
         progress_state["progress"] = 10
         print("Extracting audio from video...")
         try:
-            stream = ffmpeg.input(video_path)
-            stream = ffmpeg.output(stream, audio_path, acodec='pcm_s16le', ac=1, ar='16000')
-            ffmpeg.run(stream, quiet=True, overwrite_output=True)
+            (
+                ffmpeg
+                .input(video_path)
+                .output(audio_path, acodec='pcm_s16le', ac=1, ar='16000')
+                .overwrite_output()
+                .run(cmd=ffmpeg_bin, quiet=True)
+            )
             print("Audio extracted successfully")
         except Exception as e:
             print(f"Audio extraction failed: {e}")
@@ -352,10 +397,9 @@ def process():
         frame_sequences = sample_frames(video_path)
         if frame_sequences is None or len(frame_sequences) == 0:
             print("ERROR: Could not extract frames from video")
-            if os.path.exists(video_path):
-                os.remove(video_path)
-            if audio_path and os.path.exists(audio_path):
-                os.remove(audio_path)
+            for path in [raw_video_path, video_path, audio_path]:
+                if path and os.path.exists(path):
+                    os.remove(path)
             return jsonify({'error': 'Could not extract frames from video'})
 
         print(f"Frame sequences shape: {frame_sequences.shape}")
@@ -485,7 +529,7 @@ def process():
         }
 
         # Clean up
-        for path in [video_path, audio_path]:
+        for path in [raw_video_path, video_path, audio_path]:
             if path and os.path.exists(path): os.remove(path)
 
         progress_state["progress"] = 100
