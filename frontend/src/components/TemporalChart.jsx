@@ -10,23 +10,23 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
+import { Activity } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const EMOTIONS = ['neutral', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised'];
 const EMOTION_COLORS = {
-  neutral:   '#c4a8b0',
+  neutral:   '#94A3B8',
   happy:     '#22C55E',
-  sad:       '#3B82F6',
-  angry:     '#EF4444',
+  sad:       '#6499E9',
+  angry:     '#F43F5E',
   fearful:   '#A855F7',
   disgust:   '#84CC16',
-  surprised: '#F59E0B',
+  surprised: '#FB923C',
 };
 
 /**
  * Build dataset from probability arrays (smooth curves).
- * Each entry in probs is an array of 7 probabilities.
  */
 function buildProbDataset(probs) {
   const labels = probs.map((_, i) => `${i + 1}`);
@@ -34,9 +34,9 @@ function buildProbDataset(probs) {
     label: em.charAt(0).toUpperCase() + em.slice(1),
     data: probs.map((p) => p[idx]),
     borderColor: EMOTION_COLORS[em],
-    backgroundColor: EMOTION_COLORS[em] + '15',
+    backgroundColor: EMOTION_COLORS[em] + '10',
     borderWidth: 2,
-    pointRadius: 1.5,
+    pointRadius: 0,        // cleaner, Uncodixify style
     pointHoverRadius: 5,
     tension: 0.4,          // smooth bezier curves
     fill: false,
@@ -53,9 +53,9 @@ function buildNameDataset(temporal) {
     label: em.charAt(0).toUpperCase() + em.slice(1),
     data: temporal.map((t) => (t === em ? 1 : 0)),
     borderColor: EMOTION_COLORS[em],
-    backgroundColor: EMOTION_COLORS[em] + '15',
+    backgroundColor: EMOTION_COLORS[em] + '10',
     borderWidth: 2,
-    pointRadius: 1.5,
+    pointRadius: 0,
     pointHoverRadius: 5,
     tension: 0.4,
     fill: false,
@@ -71,51 +71,64 @@ const chartOptions = (title, hasProbs) => ({
     legend: {
       position: 'bottom',
       labels: {
-        color: '#c4a8b0',
-        font: { family: 'Inter', size: 10 },
+        color: '#94A3B8',
+        font: { family: 'Inter', size: 10, weight: '500' },
         boxWidth: 8,
-        padding: 10,
         usePointStyle: true,
         pointStyle: 'circle',
+        padding: 15,
       },
     },
     title: {
-      display: true,
-      text: title,
-      color: '#f1f5f9',
-      font: { family: 'Inter', size: 13, weight: '600' },
-      padding: { bottom: 10 },
+      display: false, // handeled by custom header
     },
     tooltip: {
-      backgroundColor: 'rgba(94,21,37,0.9)',
-      borderColor: 'rgba(213,207,47,0.2)',
+      backgroundColor: '#1C243B',
+      borderColor: 'rgba(166, 246, 255, 0.1)',
       borderWidth: 1,
-      titleFont: { family: 'Inter', size: 11 },
-      bodyFont: { family: 'Inter', size: 10 },
+      padding: 12,
+      cornerRadius: 8,
+      titleFont: { family: 'Inter', size: 12, weight: '700' },
+      bodyFont: { family: 'Inter', size: 11 },
+      titleColor: '#F8FAFC',
+      bodyColor: '#F8FAFC',
       callbacks: hasProbs
         ? {
-            label: (ctx) => `  ${ctx.dataset.label}: ${(ctx.parsed.y * 100).toFixed(1)}%`,
+            label: (ctx) => ` ${ctx.dataset.label}: ${(ctx.parsed.y * 100).toFixed(1)}%`,
           }
         : undefined,
     },
   },
   scales: {
     x: {
-      ticks: { color: '#8a6670', font: { size: 9 } },
-      grid: { color: 'rgba(138,102,112,0.08)' },
-      title: { display: true, text: 'Time Segment', color: '#8a6670', font: { size: 9 } },
+      ticks: { color: '#64748B', font: { size: 10 } },
+      grid: { color: 'rgba(166, 246, 255, 0.03)' },
+      title: { 
+        display: true, 
+        text: 'Temporal Segments (s)', 
+        color: '#64748B', 
+        font: { size: 10, weight: '600' },
+        padding: { top: 10 }
+      },
+      border: { display: false }
     },
     y: {
       min: 0,
       max: hasProbs ? 1 : 1.1,
       ticks: {
-        color: '#8a6670',
-        font: { size: 9 },
+        color: '#64748B',
+        font: { size: 10 },
         callback: (v) => hasProbs ? `${Math.round(v * 100)}%` : (v === 1 ? '●' : ''),
         stepSize: hasProbs ? 0.25 : undefined,
       },
-      grid: { color: 'rgba(138,102,112,0.06)' },
-      title: hasProbs ? { display: true, text: 'Probability', color: '#8a6670', font: { size: 9 } } : undefined,
+      grid: { color: 'rgba(166, 246, 255, 0.03)' },
+      title: hasProbs ? { 
+        display: true, 
+        text: 'Probability Confidence', 
+        color: '#64748B', 
+        font: { size: 10, weight: '600' } 
+      } : undefined,
+      border: { display: false }
     },
   },
 });
@@ -136,27 +149,38 @@ export default function TemporalChart({ results }) {
   if (!hasAudio && !hasVideo) return null;
 
   return (
-    <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-up" style={{ animationDelay: '0.2s' }}>
-      {hasAudio && (
-        <div className="glass glow-border rounded-2xl p-5">
-          <div className="h-72">
-            <Line
-              data={hasAudioProbs ? buildProbDataset(audioProbs) : buildNameDataset(audioNames)}
-              options={chartOptions('Audio Emotion Probabilities', hasAudioProbs)}
-            />
+    <div className="max-w-4xl mx-auto space-y-4 animate-fade-up">
+      <div className="flex items-center gap-3 px-2">
+        <Activity className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest">
+           Temporal Distribution
+        </h3>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {hasAudio && (
+          <div className="panel p-6 bg-surface-base">
+            <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-6 text-center">Audio Modality Engine</h4>
+            <div className="h-64">
+              <Line
+                data={hasAudioProbs ? buildProbDataset(audioProbs) : buildNameDataset(audioNames)}
+                options={chartOptions('Audio Stream', hasAudioProbs)}
+              />
+            </div>
           </div>
-        </div>
-      )}
-      {hasVideo && (
-        <div className="glass glow-border rounded-2xl p-5">
-          <div className="h-72">
-            <Line
-              data={hasVideoProbs ? buildProbDataset(videoProbs) : buildNameDataset(videoNames)}
-              options={chartOptions('Video Emotion Probabilities', hasVideoProbs)}
-            />
+        )}
+        {hasVideo && (
+          <div className="panel p-6 bg-surface-base">
+            <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-6 text-center">Video Modality Engine</h4>
+            <div className="h-64">
+              <Line
+                data={hasVideoProbs ? buildProbDataset(videoProbs) : buildNameDataset(videoNames)}
+                options={chartOptions('Video Stream', hasVideoProbs)}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

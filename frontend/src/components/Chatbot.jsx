@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, MessageCircle, Bot } from 'lucide-react';
+import { X, Send, MessageCircle, Bot, Sparkles } from 'lucide-react';
 import axios from 'axios';
 
 export default function Chatbot({ results, isOpen, onClose }) {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hey there 👋 I\'m your EmotionAI therapist. I\'m here to help you understand your emotional patterns, feel free to ask me anything.' }
+    { role: 'assistant', content: 'Neural link established. I\'m your EmotionAI diagnostic assistant. How can I help you interpret these findings?' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,9 +24,8 @@ export default function Chatbot({ results, isOpen, onClose }) {
     setLoading(true);
 
     try {
-      // Send last 10 messages as history (excluding the system greeting)
       const history = updated
-        .filter((m, i) => i > 0) // skip initial greeting
+        .filter((m, i) => i > 0)
         .slice(-10);
 
       const res = await axios.post('/chat', {
@@ -37,7 +36,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
 
       setMessages((prev) => [...prev, { role: 'assistant', content: res.data.reply || 'No response.' }]);
     } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, couldn\'t reach the server.' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Communication error — unable to reach neural core.' }]);
     } finally {
       setLoading(false);
     }
@@ -53,30 +52,34 @@ export default function Chatbot({ results, isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80 sm:w-96 flex flex-col animate-fade-up" style={{ maxHeight: 'calc(100vh - 6rem)' }}>
-      <div className="glass glow-border rounded-2xl flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100vh - 6rem)', background: 'rgba(54,12,22,0.95)' }}>
+    <div className="fixed bottom-6 right-6 z-50 w-80 sm:w-96 flex flex-col animate-fade-up shadow-2xl shadow-primary/10" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
+      <div className="bg-surface-base border border-border-subtle rounded-2xl flex flex-col overflow-hidden shadow-2xl backdrop-blur-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(213,207,47,0.1)' }}>
-          <div className="flex items-center gap-2">
-            <Bot className="w-4 h-4 text-wattle" />
-            <span className="text-sm font-semibold text-text-primary">EmotionAI Chat</span>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle bg-surface-raised/50">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Bot className="w-4 h-4 text-primary" />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest block">AI Counselor</span>
+              <span className="text-xs font-bold text-text-primary uppercase tracking-wider">Cognitive Chat</span>
+            </div>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors cursor-pointer">
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-white/5 transition-all cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ maxHeight: '400px' }}>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4" style={{ maxHeight: '420px' }}>
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
-                className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
+                className={`max-w-[85%] rounded-xl px-4 py-2.5 text-xs leading-relaxed shadow-sm ${
                   msg.role === 'user'
-                    ? 'bg-wattle/15 text-text-primary'
-                    : 'text-text-secondary'
+                    ? 'bg-primary text-bg-base font-medium'
+                    : 'bg-surface-raised border border-border-subtle text-text-secondary'
                 }`}
-                style={msg.role === 'assistant' ? { background: 'rgba(122,42,61,0.8)' } : {}}
               >
                 {msg.content}
               </div>
@@ -84,8 +87,9 @@ export default function Chatbot({ results, isOpen, onClose }) {
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="rounded-xl px-3 py-2 text-xs text-text-muted" style={{ background: 'rgba(122,42,61,0.8)' }}>
-                <span className="animate-pulse">Thinking...</span>
+              <div className="bg-surface-raised border border-border-subtle rounded-xl px-4 py-2.5 text-xs text-text-muted flex items-center gap-2">
+                <Sparkles className="w-3 h-3 text-primary animate-pulse" />
+                <span>Synthesizing...</span>
               </div>
             </div>
           )}
@@ -93,21 +97,21 @@ export default function Chatbot({ results, isOpen, onClose }) {
         </div>
 
         {/* Input */}
-        <div className="px-3 pb-3 pt-1">
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: 'rgba(61,14,24,0.9)', border: '1px solid rgba(213,207,47,0.15)' }}>
+        <div className="p-4 bg-surface-raised/30 border-t border-border-subtle">
+          <div className="flex items-center gap-3 bg-surface-base border border-border-subtle rounded-xl px-4 py-2.5 transition-all focus-within:border-primary/50 group">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your results..."
-              className="flex-1 bg-transparent text-xs text-text-primary placeholder-text-muted outline-none"
+              placeholder="Ask about your diagnostics..."
+              className="flex-1 bg-transparent text-xs text-text-primary placeholder:text-text-muted/50 outline-none"
             />
             <button
               onClick={send}
               disabled={!input.trim() || loading}
-              className="text-wattle disabled:opacity-30 hover:text-wattle-light transition-colors cursor-pointer"
+              className="text-primary disabled:opacity-20 hover:scale-110 active:scale-95 transition-all cursor-pointer"
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className="w-4 h-4" />
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { BrainCircuit, Activity, TrendingDown, ArrowRight, Zap, Waves, Eye, Gauge, HeartPulse, Shield } from 'lucide-react';
+import { BrainCircuit, Activity, TrendingDown, ArrowRight, Zap, Waves, Eye, Gauge, HeartPulse, Shield, BarChart3, Info } from 'lucide-react';
 
 const EMOTIONS = ['neutral', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised'];
 const EMOTION_EMOJI = {
@@ -14,15 +14,23 @@ const AROUSAL = { neutral: 0.1, sad: 0.2, disgust: 0.4, happy: 0.6, fearful: 0.7
 function ProgressGauge({ value, label, icon: Icon, max = 1, color }) {
   const pct = Math.round((value / max) * 100);
   return (
-    <div className="flex items-center gap-3">
-      <Icon className="w-4 h-4 shrink-0" style={{ color: color || '#D5CF2F' }} />
+    <div className="flex items-center gap-4">
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-surface-raised shrink-0 border border-border-subtle">
+        <Icon className="w-5 h-5" style={{ color: color || 'var(--color-primary)' }} />
+      </div>
       <div className="flex-1 min-w-0">
-        <div className="flex justify-between items-center mb-1">
-          <span className="text-xs text-text-secondary font-medium">{label}</span>
-          <span className="text-xs font-semibold tabular-nums" style={{ color: color || '#D5CF2F' }}>{pct}%</span>
+        <div className="flex justify-between items-center mb-1.5">
+          <span className="text-[11px] text-text-secondary font-bold uppercase tracking-wider">{label}</span>
+          <span className="text-xs font-bold tabular-nums text-text-primary">{pct}%</span>
         </div>
-        <div className="h-1.5 rounded-full bg-cherry-dark overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color || '#b5b020'}, ${color || '#D5CF2F'})` }} />
+        <div className="h-2 rounded-full bg-surface-base border border-border-subtle overflow-hidden">
+          <div 
+            className="h-full rounded-full transition-all duration-1000 ease-out" 
+            style={{ 
+              width: `${pct}%`, 
+              background: `linear-gradient(90deg, var(--color-primary-dark), ${color || 'var(--color-primary)'})` 
+            }} 
+          />
         </div>
       </div>
     </div>
@@ -44,16 +52,16 @@ function computeAdvancedMetrics(results) {
   const valenceEnd = valenceArr.slice(-Math.ceil(valenceArr.length / 3)).reduce((s, v) => s + v, 0) / Math.ceil(valenceArr.length / 3);
   const valenceShift = valenceEnd - valenceStart;
 
-  if (valenceShift > 0.2) metrics.valenceTrajectory = { direction: 'Getting Better', desc: 'Your mood improved over time — you started feeling more positive as the session went on', score: Math.min(1, (valenceEnd + 1) / 2) };
-  else if (valenceShift < -0.2) metrics.valenceTrajectory = { direction: 'Dipping Down', desc: 'Your mood dropped a bit — you seemed to feel less positive toward the end', score: Math.max(0, (valenceEnd + 1) / 2) };
-  else metrics.valenceTrajectory = { direction: 'Steady', desc: `Your mood stayed ${avgValence > 0.2 ? 'mostly positive' : avgValence < -0.2 ? 'on the lower side' : 'pretty even'} throughout`, score: (avgValence + 1) / 2 };
+  if (valenceShift > 0.2) metrics.valenceTrajectory = { direction: 'Ascending', desc: 'Positive emotional transition detected — valence levels increased significantly.', score: Math.min(1, (valenceEnd + 1) / 2) };
+  else if (valenceShift < -0.2) metrics.valenceTrajectory = { direction: 'Descending', desc: 'Negative emotional drift noted — valence levels softened toward the end.', score: Math.max(0, (valenceEnd + 1) / 2) };
+  else metrics.valenceTrajectory = { direction: 'Stable', desc: `Valence baseline remained ${avgValence > 0.2 ? 'optimistic' : avgValence < -0.2 ? 'attenuated' : 'balanced'} throughout.`, score: (avgValence + 1) / 2 };
 
   // ── 2. Arousal Arc ───────────────────────────────────
   const arousalArr = temporal.map(e => AROUSAL[e] ?? 0.3);
   const avgArousal = arousalArr.reduce((s, v) => s + v, 0) / arousalArr.length;
   const peakArousal = Math.max(...arousalArr);
   const peakIdx = arousalArr.indexOf(peakArousal);
-  const peakPosition = peakIdx < temporal.length * 0.33 ? 'early' : peakIdx > temporal.length * 0.66 ? 'late' : 'mid-session';
+  const peakPosition = peakIdx < temporal.length * 0.33 ? 'initial phase' : peakIdx > temporal.length * 0.66 ? 'final phase' : 'mid-session';
   metrics.arousal = { avg: avgArousal, peak: peakArousal, peakAt: peakPosition, emotion: temporal[peakIdx] };
 
   // ── 3. Audio-Visual Coherence ────────────────────────
@@ -66,14 +74,13 @@ function computeAdvancedMetrics(results) {
     const coherence = matches / minLen;
     metrics.avCoherence = {
       score: coherence,
-      desc: coherence > 0.7 ? 'Your voice and face matched well — you were expressing your feelings openly'
-           : coherence > 0.4 ? 'Your voice and face told slightly different stories — you might have been feeling mixed emotions'
-           : 'Your voice said one thing, but your face said another — you may have been holding back how you really feel'
+      desc: coherence > 0.7 ? 'Strong multimodal synchronization — high expressive transparency.'
+           : coherence > 0.4 ? 'Moderate modality variance — presence of complex, layered emotional states.'
+           : 'Significant modality divergence — potential internal emotional processing detected.'
     };
   }
 
   // ── 4. Emotional Regulation Index ────────────────────
-  // How quickly do high-arousal states return to baseline?
   let recoverySum = 0, recoveryCount = 0;
   for (let i = 1; i < arousalArr.length; i++) {
     if (arousalArr[i - 1] > 0.6 && arousalArr[i] < arousalArr[i - 1]) {
@@ -88,7 +95,7 @@ function computeAdvancedMetrics(results) {
   let rapidShifts = 0;
   for (let i = 2; i < temporal.length; i++) {
     if (temporal[i] === temporal[i - 2] && temporal[i] !== temporal[i - 1]) {
-      rapidShifts++; // A→B→A pattern = micro-expression
+      rapidShifts++;
     }
   }
   metrics.microExpressions = { count: rapidShifts };
@@ -114,46 +121,52 @@ export default function CognitiveInsights({ results }) {
   const m = computeAdvancedMetrics(results);
 
   return (
-    <div className="max-w-2xl mx-auto glass glow-border rounded-2xl p-6 space-y-5 animate-fade-up" style={{ animationDelay: '0.15s' }}>
-      <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-        <BrainCircuit className="w-4 h-4 text-wattle" />
-        How You're Feeling — Deep Insights
-        <span className="text-[9px] text-text-muted font-normal ml-auto">AI Analysis</span>
-      </h3>
+    <div className="max-w-2xl mx-auto panel p-6 space-y-8 animate-fade-up">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <BrainCircuit className="w-4 h-4 text-primary" />
+          </div>
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest">
+            Cognitive Diagnostics
+          </h3>
+        </div>
+        <div className="px-2 py-0.5 rounded bg-surface-raised border border-border-subtle text-[9px] font-bold text-text-muted uppercase tracking-tighter">
+          Multimodal V4.2
+        </div>
+      </div>
 
       {/* Core Gauges */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <ProgressGauge value={results.timeline_confidence ?? 0} label="How Sure We Are" icon={Activity} color="#D5CF2F" />
-        <ProgressGauge value={results.emotional_stability ?? 0} label="Emotional Steadiness" icon={HeartPulse} color="#22C55E" />
-        <ProgressGauge value={1 - (results.transition_rate ?? 0)} label="Signal Clarity" icon={Shield} color="#3B82F6" />
+      <div className="grid grid-cols-1 gap-6">
+        <ProgressGauge value={results.timeline_confidence ?? 0} label="Diagnostic Confidence" icon={Activity} color="var(--color-primary)" />
+        <ProgressGauge value={results.emotional_stability ?? 0} label="Emotional Equilibrium" icon={HeartPulse} color="#22C55E" />
+        <ProgressGauge value={1 - (results.transition_rate ?? 0)} label="Signal Harmonicity" icon={Shield} color="#A855F7" />
       </div>
 
       {m && (
-        <>
-          {/* Dotted separator */}
-          <div style={{ borderTop: '1px dotted rgba(213,207,47,0.12)' }} />
-
-          {/* Advanced Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-6 pt-6 border-t border-border-subtle">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
             {/* Valence Trajectory */}
             {m.valenceTrajectory && (
-              <div className="flex items-start gap-2.5">
-                <Waves className="w-3.5 h-3.5 text-wattle mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[11px] text-wattle font-semibold">Mood Trend: {m.valenceTrajectory.direction}</span>
-                  <p className="text-[10px] text-text-secondary leading-relaxed mt-0.5">{m.valenceTrajectory.desc}</p>
+              <div className="flex items-start gap-3">
+                <Waves className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Mood Flux</span>
+                  <p className="text-xs font-semibold text-text-primary mt-1 mb-0.5">{m.valenceTrajectory.direction}</p>
+                  <p className="text-[10px] text-text-secondary leading-normal">{m.valenceTrajectory.desc}</p>
                 </div>
               </div>
             )}
 
             {/* Arousal Arc */}
             {m.arousal && (
-              <div className="flex items-start gap-2.5">
-                <Zap className="w-3.5 h-3.5 text-wattle mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[11px] text-wattle font-semibold">Energy Level: peaked {m.arousal.peakAt}</span>
-                  <p className="text-[10px] text-text-secondary leading-relaxed mt-0.5">
-                    Your strongest moment ({Math.round(m.arousal.peak * 100)}% intensity) was {m.arousal.peakAt} when you felt {m.arousal.emotion} {EMOTION_EMOJI[m.arousal.emotion] || ''}. Overall energy: {Math.round(m.arousal.avg * 100)}%.
+              <div className="flex items-start gap-3">
+                <Zap className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Arousal Peak</span>
+                  <p className="text-xs font-semibold text-text-primary mt-1 mb-0.5">{Math.round(m.arousal.peak * 100)}% Intensity</p>
+                  <p className="text-[10px] text-text-secondary leading-normal">
+                    Peak state occurred during {m.arousal.peakAt} as {m.arousal.emotion} {EMOTION_EMOJI[m.arousal.emotion]}.
                   </p>
                 </div>
               </div>
@@ -161,25 +174,25 @@ export default function CognitiveInsights({ results }) {
 
             {/* AV Coherence */}
             {m.avCoherence && (
-              <div className="flex items-start gap-2.5">
-                <Eye className="w-3.5 h-3.5 text-wattle mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[11px] text-wattle font-semibold">Voice-Face Match: {Math.round(m.avCoherence.score * 100)}%</span>
-                  <p className="text-[10px] text-text-secondary leading-relaxed mt-0.5">{m.avCoherence.desc}</p>
+              <div className="flex items-start gap-3">
+                <Eye className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Signal Coherence</span>
+                  <p className="text-xs font-semibold text-text-primary mt-1 mb-0.5">{Math.round(m.avCoherence.score * 100)}% Matched</p>
+                  <p className="text-[10px] text-text-secondary leading-normal">{m.avCoherence.desc}</p>
                 </div>
               </div>
             )}
 
             {/* Emotional Regulation */}
             {m.regulation && (
-              <div className="flex items-start gap-2.5">
-                <Gauge className="w-3.5 h-3.5 text-wattle mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-[11px] text-wattle font-semibold">Self-Control: {Math.round(m.regulation.score * 100)}%</span>
-                  <p className="text-[10px] text-text-secondary leading-relaxed mt-0.5">
-                    {m.regulation.score > 0.7 ? 'You bounce back quickly after emotional highs — good self-control' 
-                     : m.regulation.score > 0.4 ? 'You take a bit of time to settle down after strong emotions'
-                     : 'Strong emotions stayed with you for a while — you were really feeling things deeply'}
+              <div className="flex items-start gap-3">
+                <Gauge className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Homeostasis</span>
+                  <p className="text-xs font-semibold text-text-primary mt-1 mb-0.5">{Math.round(m.regulation.score * 100)}% Regulation</p>
+                  <p className="text-[10px] text-text-secondary leading-normal">
+                    Index of emotional recovery following high-arousal stimulus variants.
                   </p>
                 </div>
               </div>
@@ -187,40 +200,45 @@ export default function CognitiveInsights({ results }) {
           </div>
 
           {/* Emotional Journey + Micro-expressions */}
-          <div style={{ borderTop: '1px dotted rgba(213,207,47,0.08)' }} />
-          <div className="space-y-2.5">
+          <div className="p-4 rounded-lg bg-surface-base border border-border-subtle space-y-4">
             {/* Journey arc */}
             {m.journey.firstDom && m.journey.secondDom && (
-              <div className="flex items-start gap-2.5">
-                <ArrowRight className="w-3.5 h-3.5 text-wattle mt-0.5 shrink-0" />
-                <p className="text-[10px] text-text-secondary leading-relaxed">
-                  <span className="text-wattle font-semibold">Your Journey:</span>{' '}
+              <div className="flex items-start gap-3">
+                <ArrowRight className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <p className="text-[11px] text-text-secondary leading-relaxed">
+                  <span className="text-text-primary font-bold mr-1">Dynamic Mapping:</span>
                   {m.journey.firstDom[0] !== m.journey.secondDom[0]
-                    ? `You started out ${m.journey.firstDom[0]} ${EMOTION_EMOJI[m.journey.firstDom[0]] || ''} and ended up ${m.journey.secondDom[0]} ${EMOTION_EMOJI[m.journey.secondDom[0]] || ''} — your feelings shifted ${m.journey.transitions.length} time${m.journey.transitions.length !== 1 ? 's' : ''} through ${m.journey.uniqueEmotions} different emotions`
-                    : `You stayed mostly ${m.journey.firstDom[0]} ${EMOTION_EMOJI[m.journey.firstDom[0]] || ''} the whole time — we picked up ${m.journey.uniqueEmotions} different emotion${m.journey.uniqueEmotions !== 1 ? 's' : ''} in total`}
+                    ? `Transition from ${m.journey.firstDom[0]} ${EMOTION_EMOJI[m.journey.firstDom[0]]} to ${m.journey.secondDom[0]} ${EMOTION_EMOJI[m.journey.secondDom[0]]} over ${m.journey.transitions.length} shifts.`
+                    : `Persistent ${m.journey.firstDom[0]} ${EMOTION_EMOJI[m.journey.firstDom[0]]} state with minor variance across ${m.journey.uniqueEmotions} emotion types.`}
                 </p>
               </div>
             )}
 
             {/* Micro-expressions */}
             {m.microExpressions.count > 0 && (
-              <div className="flex items-start gap-2.5">
-                <BrainCircuit className="w-3.5 h-3.5 text-wattle mt-0.5 shrink-0" />
-                <p className="text-[10px] text-text-secondary leading-relaxed">
-                  <span className="text-wattle font-semibold">Quick Flickers:</span>{' '}
-                  We caught {m.microExpressions.count} tiny flash{m.microExpressions.count > 1 ? 'es' : ''} where a different emotion popped up for just a split second before going back — these are quick, real feelings that most systems can't catch.
+              <div className="flex items-start gap-3">
+                <BarChart3 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <p className="text-[11px] text-text-secondary leading-relaxed">
+                  <span className="text-text-primary font-bold mr-1">Micro-Expressions:</span>
+                  Detected {m.microExpressions.count} high-frequency temporal shifts. These represent subconscious emotional leakage beyond focal states.
                 </p>
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
 
       {/* Reasoning */}
       {results.reasoning && (
-        <p className="text-[10px] text-text-muted leading-relaxed pt-3 italic" style={{ borderTop: '1px solid rgba(213,207,47,0.06)' }}>
-          {results.reasoning}
-        </p>
+        <div className="pt-6 border-t border-border-subtle">
+           <div className="flex items-start gap-2 mb-2">
+             <Info className="w-3 h-3 text-text-muted mt-0.5" />
+             <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Analysis Reasoning</span>
+           </div>
+           <p className="text-xs text-text-muted leading-relaxed italic">
+            "{results.reasoning}"
+          </p>
+        </div>
       )}
     </div>
   );
