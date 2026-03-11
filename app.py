@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import cv2
 import numpy as np
@@ -7,6 +7,7 @@ from tensorflow import keras
 import requests
 import ffmpeg
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Silence TF warnings
 import json
 
 app = Flask(__name__)
@@ -20,14 +21,21 @@ print("Loading models...")
 try:
     audio_model = keras.models.load_model('models/audio_emotion_model.h5')
     video_model = keras.models.load_model('models/video_emotion_model.h5')
-    base_model = keras.applications.MobileNetV2(weights='imagenet', include_top=False, input_shape=(112, 112, 3))
-    base_model.trainable = False
-    print("Models loaded successfully")
+    
+    # Feature extractor for video
+    base_cnn = keras.applications.MobileNetV2(weights='imagenet', include_top=False, input_shape=(112, 112, 3))
+    base_cnn.trainable = False
+    feature_extractor = keras.Sequential([
+        base_cnn,
+        keras.layers.GlobalAveragePooling2D()
+    ])
+    
+    print("Models and feature extractor loaded successfully")
 except Exception as e:
     print(f"Error loading models: {e}")
     audio_model = None
     video_model = None
-    base_model = None
+    feature_extractor = None
 
 # Initialize Groq client
 # below trying to set env of groq
@@ -135,46 +143,59 @@ def cognitive_reasoning(audio_emotion, video_emotion, fused_emotion, audio_preds
     elif fused_emotion == 'disgust':
         reasoning.append("Disgust detected. This emotion often relates to aversion or strong disapproval. Consider recent experiences or environmental factors.")
 
-    # Modality reliability assessment
-    if abs(audio_conf - video_conf) > 0.3:
-        if audio_conf > video_conf:
-            reasoning.append("Audio modality appears more reliable. This could be due to clear vocal expression or poor video quality.")
-        else:
-            reasoning.append("Video modality appears more reliable. This might indicate clear facial expressions or audio recording issues.")
-    else:
-        reasoning.append("Both modalities show balanced reliability, suggesting consistent emotional expression across channels.")
+    # Dynamic Mapping: Stability & Intensity analysis
+    stability_score = results.get('emotional_stability', 0.5)
+    intensity_peak = results.get('transition_rate', 0.0)
+    
+    audio_prob = np.max(np.mean(audio_preds, axis=0))
+    video_prob = np.max(np.mean(video_preds, axis=0))
 
-    # Temporal pattern analysis
+    if audio_prob and video_prob:
+        pref = "Multimodal analysis shows high emotional cohesion."
+    else:
+        pref = "Analysis suggests a modal divergence, indicating complex internal regulation."
+
+    # Temporal pattern analysis for Dynamic Mapping
     audio_changes = sum(1 for i in range(1, len(audio_preds)) if np.argmax(audio_preds[i]) != np.argmax(audio_preds[i-1]))
     video_changes = sum(1 for i in range(1, len(video_preds)) if np.argmax(video_preds[i]) != np.argmax(video_preds[i-1]))
-    reasoning.append(f"Emotional transitions: Audio {audio_changes}, Video {video_changes}. Frequent changes may indicate emotional volatility or complex feelings.")
+    total_shifts = audio_changes + video_changes
+    
+    mapping_depth = []
+    mapping_depth.append(pref)
+    
+    if total_shifts > 5:
+        mapping_depth.append(f"Dynamic Mapping detects a high-frequency temporal shift ({total_shifts} transitions), suggesting a sudden change in emotional state.")
+    else:
+        mapping_depth.append(f"Temporal behavior indicates high synchronicity and steady state transitions.")
+        
+    if stability_score > 0.8: mapping_depth.append("High emotional cohesion observed.")
+    else: mapping_depth.append("Dynamic flux detected in the emotional arc.")
 
-    return " ".join(reasoning)
+    return " ".join(mapping_depth)
 
 def generate_llm_content(fused_emotion, reasoning, audio_temporal, video_temporal):
     """Generate personalized story, quote, video, books, and songs using Groq LLM."""
     prompt = f"""
-Based on the emotion analysis results:
+Based on the Dynamic Mapping and Multimodal analysis results:
 
 Primary Emotion Detected: {fused_emotion}
-Cognitive Analysis: {reasoning}
+Cognitive Analysis (Temporal Behavior): {reasoning}
 Audio Emotional Timeline: {', '.join(audio_temporal)}
 Video Emotional Timeline: {', '.join(video_temporal)}
 
-Please generate highly personalized content that directly relates to this specific emotional state and analysis:
+Please generate highly personalized content focused on the DYNAMIC MAPPING of these shifts:
 
-1. A personalized story (approximately 200 words) that captures the emotional journey shown in the timeline and explains the fusion result. Make it detailed and narrative-rich.
+1. A personalized story (STRICTLY 100-110 words) that describes the 'Sudden Shifts' or 'Temporal Consistency' seen in the analysis. Focus on the arc of the emotion rather than just the final state.
 
-2. An inspirational quote specifically tailored to someone experiencing this emotion.
+2. An inspirational quote tailored to this specific dynamic behavior.
 
-3. A YouTube video recommendation as an object with keys: title, channel, link (use this exact format: https://www.youtube.com/results?search_query=SEARCH+TERMS — replace spaces with + signs, DO NOT invent video IDs), and reason (why it helps).
+3. A YouTube video recommendation (object with title, channel, link, and reason). Link format: https://www.youtube.com/results?search_query=SEARCH+TERMS
 
-4. 2-3 short book recommendations as an array of objects with keys: title, author, and reason (why it suits this emotional state). Pick well-known, accessible books.
+4. 2-3 book recommendations as an array of objects with keys: title, author, reason, and purchase_link (Provide a Google Books or Amazon search URL for the book).
 
-5. 2-3 song recommendations with specific artist names, song titles, and brief explanations. For the link field, use YouTube search format: https://www.youtube.com/results?search_query=ARTIST+TITLE (replace spaces with +).
+5. 2-3 song recommendations (artist, title, explanation). Note: No links needed for songs, as they are cached locally.
 
-Format the response as valid JSON with keys: story, quote, video (object with title/channel/link/reason), books (array of objects with title/author/reason), songs (array of objects with artist/title/link/explanation).
-Ensure the content is empathetic, supportive, and directly addresses the detected emotional state and cognitive insights.
+Format as valid JSON. Ensure the story is EXACTLY between 100 and 110 words.
 """
     try:
         headers = {
@@ -342,7 +363,7 @@ def process():
     print("STARTING EMOTION ANALYSIS PROCESS")
     print("=" * 50)
 
-    if video_model is None or base_model is None:
+    if video_model is None or feature_extractor is None:
         print("ERROR: Models not loaded")
         return jsonify({'error': 'Models not loaded'})
 
@@ -391,85 +412,124 @@ def process():
             print(f"Audio extraction failed: {e}")
             audio_path = None
 
-        # Process video and get temporal predictions
-        progress_state["status"] = "Processing Video"
-        print("Extracting video features...")
-        frame_sequences = sample_frames(video_path)
-        if frame_sequences is None or len(frame_sequences) == 0:
-            print("ERROR: Could not extract frames from video")
-            for path in [raw_video_path, video_path, audio_path]:
-                if path and os.path.exists(path):
-                    os.remove(path)
-            return jsonify({'error': 'Could not extract frames from video'})
-
-        print(f"Frame sequences shape: {frame_sequences.shape}")
-
-        # Get video temporal predictions
-        video_preds = []
-        total_seq = len(frame_sequences)
-        for i, seq in enumerate(frame_sequences):
-            frame_features = []
-            for frame in seq:
-                frame_exp = np.expand_dims(frame, axis=0)
-                feat = base_model(frame_exp)
-                feat = keras.layers.GlobalAveragePooling2D()(feat)
-                frame_features.append(feat.numpy().flatten())
-            video_feat = np.mean(frame_features, axis=0)
-            pred = video_model.predict(np.expand_dims(video_feat, axis=0), verbose=0)[0]
-            video_preds.append(pred)
-            
-            # Map video processing to 10% -> 40%
-            current_progress = 10 + int((i / total_seq) * 30)
-            progress_state["progress"] = current_progress
-            
-            if i % 5 == 0:
-                print(f"Processed video frame sequence {i+1}/{total_seq}")
-
-        progress_state["progress"] = 40
-        video_preds = np.array(video_preds)
-        video_emotions_temporal = [EMOTIONS_7[np.argmax(pred)] for pred in video_preds]
-
-        # Process audio if available
-        audio_preds = []
-        audio_emotions_temporal = []
-        if audio_path and os.path.exists(audio_path) and audio_model is not None:
-            progress_state["status"] = "Processing Audio"
-            print("Processing audio features...")
+        # --- UNIFIED TEMPORAL PROCESSING ---
+        progress_state["status"] = "Initializing Multimodal Streams"
+        progress_state["progress"] = 12
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total_frames / fps if fps > 0 else 0
+        
+        # Audio Modality Engine Setup
+        y_audio, sr_audio = (None, None)
+        if audio_path and os.path.exists(audio_path):
+            print("Audio Modality Engine: Loading stream...")
+            progress_state["status"] = "Loading Audio Stream"
             try:
-                mfcc_windows = extract_mfcc(audio_path)
-                if mfcc_windows is not None and len(mfcc_windows) > 0:
-                    total_win = len(mfcc_windows)
-                    for i, mfcc_window in enumerate(mfcc_windows):
-                        pred = audio_model.predict(np.expand_dims(mfcc_window, axis=0), verbose=0)[0]
-                        audio_preds.append(pred)
-                        
-                        # Map audio processing to 40% -> 80%
-                        current_progress = 40 + int((i / total_win) * 40)
-                        progress_state["progress"] = current_progress
-                        
-                        if i % 10 == 0:
-                            print(f"Processed audio window {i+1}/{total_win}")
-
-                    audio_preds = np.array(audio_preds)
-                    audio_emotions_temporal = [EMOTIONS_7[np.argmax(pred)] for pred in audio_preds]
-                else:
-                    print("No audio features extracted")
+                y_audio, sr_audio = librosa.load(audio_path, sr=SR, mono=True)
+                print(f"Audio loaded: {len(y_audio)/SR:.2f}s at {SR}Hz")
             except Exception as e:
-                print(f"Audio processing failed: {e}")
+                print(f"Audio Load Error: {e}")
 
-        progress_state["progress"] = 80
-        progress_state["status"] = "Cognitive Analysis"
+        # Create overlapping 1s windows (every 0.5s)
+        time_points = np.arange(0, max(0.1, duration - 1.0), 0.5)
+        video_batch = []
+        audio_batch = []
+        
+        total_segments = len(time_points)
+        print(f"Synthesizing {total_segments} temporal segments...")
+        
+        for i, t in enumerate(time_points):
+            # 1. Video Segment Extraction
+            progress_state["status"] = f"Video Segmentation: {i+1}/{total_segments}"
+            # Scale 15% -> 35%
+            progress_state["progress"] = 15 + int((i / total_segments) * 20)
+            
+            start_f = int(t * fps)
+            end_f = int((t + 1) * fps)
+            seq = []
+            step = max(1, (end_f - start_f) // NUM_FRAMES)
+            for f_idx in range(start_f, min(total_frames, end_f), step):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
+                ret, frame = cap.read()
+                if ret:
+                    seq.append(cv2.resize(frame, TARGET_SIZE) / 255.0)
+                if len(seq) == NUM_FRAMES: break
+            
+            # Pad video seq if needed
+            while len(seq) < NUM_FRAMES:
+                seq.append(np.zeros((*TARGET_SIZE, 3)))
+            video_batch.append(np.array(seq))
+            
+            # 2. Audio Segment Extraction (MFCC)
+            if y_audio is not None:
+                progress_state["status"] = f"Audio Modality: MFCC Segment {i+1}/{total_segments}"
+                # Scale 35% -> 45%
+                progress_state["progress"] = 35 + int((i / total_segments) * 10)
+                
+                as_start = int(t * SR)
+                as_end = int((t + 1) * SR)
+                y_segment = y_audio[as_start:as_end]
+                
+                # Extract MFCC for this 1s chunk
+                m_feat = librosa.feature.mfcc(y=y_segment, sr=SR, n_mfcc=N_MFCC, hop_length=HOP_LENGTH).T
+                # Pad/Truncate to N_FRAMES
+                if m_feat.shape[0] < N_FRAMES:
+                    m_feat = np.pad(m_feat, ((0, N_FRAMES - m_feat.shape[0]), (0, 0)), mode='constant')
+                else:
+                    m_feat = m_feat[:N_FRAMES]
+                audio_batch.append(m_feat[..., np.newaxis])
+            
+            if i % 5 == 0 or i == total_segments - 1:
+                print(f"  > Processing segment {i+1}/{total_segments} at {t:.1f}s (Audio+Video)")
+
+        cap.release()
+
+        # BATCH INFERENCE
+        video_preds = []
+        audio_preds = []
+        
+        if video_batch:
+            progress_state["status"] = "Neural Video Inference: Running Batch"
+            progress_state["progress"] = 50
+            print("Neural Engine: Running video batch inference...")
+            v_batch = np.array(video_batch) # (N, 10, 112, 112, 3)
+            # Flatten to extract features
+            v_flat = v_batch.reshape(-1, 112, 112, 3)
+            v_features = feature_extractor.predict(v_flat, batch_size=32, verbose=0)
+            # Reshape back and pool
+            v_seq_feat = v_features.reshape(len(time_points), NUM_FRAMES, -1)
+            v_input = np.mean(v_seq_feat, axis=1)
+            video_preds = video_model.predict(v_input, verbose=0)
+            print(f"Neural Engine: Video predictions generated for {len(video_preds)} segments")
+            
+        if audio_batch:
+            progress_state["status"] = "Neural Audio Inference: Running Batch"
+            progress_state["progress"] = 70
+            print("Neural Engine: Running audio batch inference...")
+            a_input = np.array(audio_batch) # (N, 300, 13, 1)
+            audio_preds = audio_model.predict(a_input, batch_size=32, verbose=0)
+            print(f"Neural Engine: Audio predictions generated for {len(audio_preds)} segments")
+
+        progress_state["progress"] = 85
+        progress_state["status"] = "Cognitive Synthesis Layer"
+        print("Cognitive Layer: Analyzing multimodal temporal patterns...")
+
+        audio_emotions_temporal = [EMOTIONS_7[np.argmax(p)] for p in audio_preds] if len(audio_preds) > 0 else []
+        video_emotions_temporal = [EMOTIONS_7[np.argmax(p)] for p in video_preds] if len(video_preds) > 0 else []
 
         # TIMELINE-BASED EMOTION DETERMINATION
         from collections import Counter
         combined_emotions = []
         if audio_emotions_temporal and video_emotions_temporal:
-            min_length = min(len(audio_emotions_temporal), len(video_emotions_temporal))
-            combined_emotions = [video_emotions_temporal[i] for i in range(min_length)]
+            # Equal length guaranteed by time_points
+            combined_emotions = video_emotions_temporal 
         elif video_emotions_temporal:
             combined_emotions = video_emotions_temporal
         elif audio_emotions_temporal:
             combined_emotions = audio_emotions_temporal
+        else:
+            combined_emotions = ["neutral"]
 
         emotion_counts = Counter(combined_emotions)
         total_predictions = len(combined_emotions)
@@ -499,7 +559,7 @@ def process():
         llm_content = generate_llm_content(
             timeline_dominant_emotion,
             cognitive_reasoning,
-            video_emotions_temporal,
+            audio_emotions_temporal,
             video_emotions_temporal
         )
 
@@ -541,27 +601,70 @@ def process():
         progress_state["status"] = f"Error: {str(e)}"
         return jsonify({'error': str(e)})
 
+@app.route('/downloaded_music/<path:filename>')
+def serve_music(filename):
+    """Serve cached music files from the music/ directory."""
+    return send_from_directory('music', filename)
+
 @app.route('/music/search', methods=['GET'])
 def music_search():
-    """Search Deezer for a song and return preview URL (free, no API key)."""
+    """Search music for a song, cache it locally, and return local stream URL."""
     try:
         q = request.args.get('q', '')
         if not q:
             return jsonify({'error': 'No query'}), 400
-        resp = requests.get(f'https://api.deezer.com/search?q={q}&limit=1')
-        if resp.status_code == 200:
-            data = resp.json().get('data', [])
-            if data:
-                track = data[0]
-                return jsonify({
-                    'title': track.get('title', ''),
-                    'artist': track.get('artist', {}).get('name', ''),
-                    'preview': track.get('preview', ''),
-                    'album_art': track.get('album', {}).get('cover_medium', ''),
-                    'duration': track.get('duration', 0),
-                })
-        return jsonify({'error': 'Not found'}), 404
+            
+        print(f"Music Engine: Searching for {q}...")
+        # Step 1: Search for the song
+        search_url = f"https://musicapi.x007.workers.dev/search?q={requests.utils.quote(q)}&searchEngine=gaana"
+        search_resp = requests.get(search_url, timeout=10)
+        
+        if search_resp.status_code == 200:
+            search_data = search_resp.json()
+            results = search_data.get('response', [])
+            if not results:
+                return jsonify({'error': 'Not found'}), 404
+            
+            top_song = results[0]
+            song_id = top_song.get('id')
+            # Sanitize filename: replace non-alphanumeric with underscores
+            safe_title = "".join([c if c.isalnum() else "_" for c in top_song.get('title', 'song')])
+            filename = f"{song_id}_{safe_title}.mp3"
+            filepath = os.path.join('music', filename)
+            
+            # Step 2: Check cache or download
+            if not os.path.exists(filepath):
+                print(f"Music Engine: Caching new song -> {filename}")
+                fetch_url = f"https://musicapi.x007.workers.dev/fetch?id={song_id}"
+                fetch_resp = requests.get(fetch_url, timeout=15)
+                
+                if fetch_resp.status_code == 200:
+                    stream_url = fetch_resp.json().get('response')
+                    if stream_url:
+                        # Download the actual file
+                        audio_data = requests.get(stream_url, timeout=20).content
+                        with open(filepath, 'wb') as f:
+                            f.write(audio_data)
+                        print(f"Music Engine: Cache successful.")
+                    else:
+                        return jsonify({'error': 'Stream URL not found'}), 404
+                else:
+                    return jsonify({'error': 'Fetch API error'}), 500
+            else:
+                print(f"Music Engine: Using cached file -> {filename}")
+
+            # Return local URL
+            return jsonify({
+                'title': top_song.get('title', 'Unknown Title'),
+                'artist': top_song.get('more_info', {}).get('artistMap', {}).get('primary_artists', [{}])[0].get('name', 'Various Artists'),
+                'preview': f"/downloaded_music/{filename}", 
+                'album_art': top_song.get('image', ''),
+                'duration': int(top_song.get('more_info', {}).get('duration', 0)),
+            })
+                
+        return jsonify({'error': 'Music API error'}), 500
     except Exception as e:
+        print(f"Music Engine Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/chat', methods=['POST'])
