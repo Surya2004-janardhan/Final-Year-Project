@@ -18,14 +18,17 @@ const NEGATIVE_EMOTIONS = ['angry', 'sad', 'fearful', 'disgust'];
 
 export default function useDaemon({ settings, onNewResult }) {
   const [isDaemonActive, setIsDaemonActive] = useState(false);
-  const [daemonStatus, setDaemonStatus] = useState('idle'); // 'idle' | 'waiting' | 'recording' | 'processing'
-  const [nextFireIn, setNextFireIn] = useState(null); // seconds until next session
+  const [daemonStatus, setDaemonStatus] = useState('idle');
+  const [nextFireIn, setNextFireIn] = useState(null);
 
-  const intervalRef   = useRef(null); // main repeat timer
-  const countdownRef  = useRef(null); // per-second countdown display timer
-  const recordingRef  = useRef(null); // current MediaRecorder
-  const streamRef     = useRef(null);
+  const intervalRef    = useRef(null);
+  const countdownRef   = useRef(null);
+  const recordingRef   = useRef(null);
+  const streamRef      = useRef(null);
   const recentEmotions = useRef([]); // rolling buffer of last 5 results
+  // Always-fresh settings to avoid stale closure bugs in callbacks
+  const settingsRef    = useRef(settings);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
 
   // ── Helpers ───────────────────────────────────────────────
   const requestStream = async () => {
@@ -77,36 +80,49 @@ export default function useDaemon({ settings, onNewResult }) {
 
   const detectShift = useCallback((newEmotion) => {
     const history = recentEmotions.current;
-    if (history.length < 2) return false;
+    // newEmotion is NOT yet in history when this is called
+    if (!NEGATIVE_EMOTIONS.includes(newEmotion)) return false; // Only notify on negative emotions
 
-    const prevEmotion = history[history.length - 1];
-    const wasPositive = ['happy', 'neutral', 'surprised'].includes(prevEmotion);
-    const isNowNegative = NEGATIVE_EMOTIONS.includes(newEmotion);
+    const prev = history[history.length - 1]; // last confirmed emotion before current
+    if (!prev) return true; // first reading ever, and it's negative → always notify
 
-    // Count recent negative concentration
-    const recentNeg = history.slice(-3).filter(e => NEGATIVE_EMOTIONS.includes(e)).length;
+    const wasPositive = !NEGATIVE_EMOTIONS.includes(prev);
 
-    return (wasPositive && isNowNegative) || recentNeg >= 2;
+    // Trigger if: was positive and now negative, OR 2+ negatives in a row
+    const recentNeg = history.slice(-2).filter(e => NEGATIVE_EMOTIONS.includes(e)).length;
+    return wasPositive || recentNeg >= 2;
   }, []);
 
   const triggerNotification = useCallback(async (emotion) => {
-    const { notifyPermission, musicMappings } = settings;
+    // Use ref to get always-fresh settings (avoids stale closure)
+    const { notifyPermission, musicMappings } = settingsRef.current;
     const musicPath = musicMappings?.[emotion] || null;
-    const autoPlay = notifyPermission === 'auto';
+    const autoPlay  = notifyPermission === 'auto';
 
-    console.log(`[Daemon] Shift detected → ${emotion}. Auto-play: ${autoPlay}`);
+    console.log(`[Daemon] Triggering notification → ${emotion}. AutoPlay: ${autoPlay}. Music: ${musicPath}`);
 
     if (ipc) {
-      await ipc.invoke('notify-shift', { emotion, autoPlay, musicPath });
+      try {
+        await ipc.invoke('notify-shift', { emotion, autoPlay, musicPath });
+        console.log('[Daemon] Notification IPC sent successfully');
+      } catch(e) {
+        console.error('[Daemon] Notification IPC failed:', e);
+      }
     } else {
-      // Fallback to web notification
-      if (Notification.permission === 'granted') {
+      // Fallback: web Notification API
+      try {
+        if (Notification.permission !== 'granted') {
+          await Notification.requestPermission();
+        }
         new Notification('EmotionAI – Shift Detected', {
           body: `Detected shift to ${emotion}. ${autoPlay ? 'Playing music.' : 'Open app to respond.'}`
         });
+      } catch(e) {
+        console.error('[Daemon] Web notification fallback failed:', e);
       }
     }
-  }, [settings]);
+  }, []);  // empty deps — reads from settingsRef.current at call time
+
 
   // ── Core Session ──────────────────────────────────────────
   const runSession = useCallback(async () => {
@@ -124,19 +140,24 @@ export default function useDaemon({ settings, onNewResult }) {
 
       if (result && !result.error) {
         const emotion = result.fused_emotion;
+        console.log(`[Daemon] Analysis done. Emotion: ${emotion}`);
+
+        // Detect shift BEFORE pushing into history
+        const shouldNotify = detectShift(emotion);
+
+        // Now update rolling buffer
+        recentEmotions.current.push(emotion);
+        if (recentEmotions.current.length > 5) recentEmotions.current.shift();
 
         // Persist result via IPC
         if (ipc) await ipc.invoke('save-result', result);
 
-        // Update rolling buffer
-        recentEmotions.current.push(emotion);
-        if (recentEmotions.current.length > 5) recentEmotions.current.shift();
-
         // Notify parent
         if (onNewResult) onNewResult(result);
 
-        // Check for shift
-        if (detectShift(emotion)) {
+        // Fire notification if shift detected
+        if (shouldNotify) {
+          console.log(`[Daemon] Shift confirmed — firing notification for ${emotion}`);
           await triggerNotification(emotion);
         }
 

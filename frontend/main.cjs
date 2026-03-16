@@ -298,7 +298,11 @@ function createTray() {
 
 // ─── App Lifecycle ────────────────────────────────────────────
 app.whenReady().then(async () => {
+  // Required for Windows native toast notifications to appear in Action Center
+  app.setAppUserModelId('EmotionAI');
+
   initPaths(); // Must be first — sets up file paths
+
   setupIPC();
   createWindow();
   createTray();

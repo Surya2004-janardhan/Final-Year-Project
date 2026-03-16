@@ -56,8 +56,14 @@ export default function SettingsView({ settings, onSave }) {
             onChange={e => set({ intervalMinutes: Number(e.target.value) })}
             className="px-3 py-2 rounded-lg bg-surface-raised border border-border-strong text-sm font-bold text-text-primary outline-none cursor-pointer"
           >
+            <option value={2}>Every 2 minutes</option>
+            <option value={10}>Every 10 minutes</option>
             <option value={15}>Every 15 minutes</option>
             <option value={30}>Every 30 minutes</option>
+            <option value={45}>Every 45 minutes</option>
+            <option value={60}>Every 60 minutes</option>
+            <option value={90}>Every 90 minutes</option>
+            <option value={120}>Every 120 minutes</option>
           </select>
         </div>
 
@@ -71,9 +77,14 @@ export default function SettingsView({ settings, onSave }) {
             value={settings.recordDurationMinutes}
             onChange={e => set({ recordDurationMinutes: Number(e.target.value) })}
             className="px-3 py-2 rounded-lg bg-surface-raised border border-border-strong text-sm font-bold text-text-primary outline-none cursor-pointer"
-          >
+          > 
+            <option value={1}>1 minute</option>
+            <option value={2}>2 minutes </option>
             <option value={5}>5 minutes</option>
+            <option value={6}>6 minutes</option>
+            <option value={7}>7 minutes</option>
             <option value={10}>10 minutes</option>
+            
           </select>
         </div>
 
