@@ -1,18 +1,46 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, MessageCircle, Bot, Sparkles } from 'lucide-react';
+import { X, Send, Bot, Sparkles } from 'lucide-react';
 import axios from 'axios';
 
 export default function Chatbot({ results, isOpen, onClose }) {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Neural link established. I\'m your EmotionAI diagnostic assistant. How can I help you interpret these findings?' }
+    { role: 'assistant', content: 'I am your personal stress support assistant. Ask me about today, this week, your work stress pattern, or what your emotional changes may mean in simple English.' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [analysisHistory, setAnalysisHistory] = useState([]);
   const endRef = useRef(null);
+  const ipc = typeof window !== 'undefined' && window.require
+    ? window.require('electron').ipcRenderer
+    : null;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHistory = async () => {
+      try {
+        if (ipc) {
+          const data = await ipc.invoke('load-results');
+          if (active) setAnalysisHistory(Array.isArray(data) ? data.slice(0, 20) : []);
+          return;
+        }
+
+        const res = await axios.get('/history?limit=20');
+        if (active) setAnalysisHistory(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        if (active) setAnalysisHistory([]);
+      }
+    };
+
+    loadHistory();
+    return () => {
+      active = false;
+    };
+  }, [ipc, results]);
 
   const send = async () => {
     if (!input.trim() || loading) return;
@@ -32,6 +60,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
         message: userMsg.content,
         context: results || {},
         history,
+        analysis_history: analysisHistory,
       });
 
       setMessages((prev) => [...prev, { role: 'assistant', content: res.data.reply || 'No response.' }]);
@@ -62,7 +91,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
             </div>
             <div className="space-y-0.5">
               <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest block">AI Counselor</span>
-              <span className="text-xs font-bold text-text-primary uppercase tracking-wider">Cognitive Chat</span>
+              <span className="text-xs font-bold text-text-primary uppercase tracking-wider">Personal Stress AI</span>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-white/5 transition-all cursor-pointer">
@@ -89,7 +118,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
             <div className="flex justify-start">
               <div className="bg-surface-raised border border-border-subtle rounded-xl px-4 py-2.5 text-xs text-text-muted flex items-center gap-2">
                 <Sparkles className="w-3 h-3 text-primary animate-pulse" />
-                <span>Synthesizing...</span>
+                <span>Thinking through your recent pattern...</span>
               </div>
             </div>
           )}
@@ -103,7 +132,7 @@ export default function Chatbot({ results, isOpen, onClose }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your diagnostics..."
+              placeholder="Ask about stress trends, today, this week, or what to do next..."
               className="flex-1 bg-transparent text-xs text-text-primary placeholder:text-text-muted/50 outline-none"
             />
             <button

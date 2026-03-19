@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles, BookOpen, Quote, Play, Pause, Music, BookMarked, ExternalLink, Youtube } from 'lucide-react';
+import { Sparkles, BookOpen, Quote, Play, Pause, Music, BookMarked, ExternalLink, Youtube, SmilePlus } from 'lucide-react';
 import axios from 'axios';
 
 /* ── YouTube embed helper ─────────────────────────────── */
@@ -103,7 +103,7 @@ function SongPlayer({ artist, title }) {
 /* ── Main component ───────────────────────────────────── */
 export default function AIContent({ results }) {
   if (!results) return null;
-  const { story, quote, video, books, songs } = results;
+  const { story, quote, video, books, songs, memes, stress_label: stressLabel } = results;
 
   const videoObj = typeof video === 'object' && video !== null ? video : null;
 
@@ -115,7 +115,7 @@ export default function AIContent({ results }) {
         </div>
         <div>
           <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest">AI Recommendation Engine</h3>
-          <p className="text-[10px] text-text-muted font-semibold uppercase tracking-tighter">AI-Synthesized Neural Arc</p>
+          <p className="text-[10px] text-text-muted font-semibold uppercase tracking-tighter">Simple stress support for workday patterns{stressLabel ? ` · ${stressLabel} stress` : ''}</p>
         </div>
       </div>
 
@@ -210,6 +210,26 @@ export default function AIContent({ results }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {songs.map((song, i) => (
                 <SongPlayer key={i} artist={song.artist} title={song.title} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {memes && memes.length > 0 && (
+          <div className="lg:col-span-12 panel p-6 space-y-5">
+            <div className="flex items-center gap-2 text-primary">
+              <SmilePlus className="w-4 h-4" />
+              <span className="text-[11px] font-bold uppercase tracking-widest">Light Relief Memes</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {memes.map((meme, i) => (
+                <div key={`${meme.template}-${i}`} className="p-5 rounded-xl bg-surface-base border border-border-subtle space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">{meme.template}</p>
+                  <p className="text-sm font-bold text-text-primary leading-relaxed">{meme.caption}</p>
+                  {meme.reason && (
+                    <p className="text-xs text-text-secondary leading-relaxed">{meme.reason}</p>
+                  )}
+                </div>
               ))}
             </div>
           </div>
