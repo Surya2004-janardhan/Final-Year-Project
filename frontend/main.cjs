@@ -310,14 +310,9 @@ function setupIPC() {
   // Native OS Notification
   ipcMain.handle('notify-shift', (_e, { emotion, autoPlay, musicPath }) => {
     mainLog('notify', 'notify-shift received', { emotion, autoPlay, musicPath });
-    if (!Notification.isSupported()) return { ok: false, error: 'Notification not supported' };
-
-    mainWindow?.webContents.send('shift-toast', {
-      emotion,
-      autoPlay,
-      musicPath,
-      ts: new Date().toISOString(),
-    });
+    const supported = Notification.isSupported();
+    mainLog('notify', 'notification capability checked', { supported });
+    if (!supported) return { ok: false, error: 'Notification not supported' };
 
     const notif = new Notification({
       title: 'EmotionAI - Emotional Shift',

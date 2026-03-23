@@ -769,7 +769,7 @@ def process():
         # COGNITIVE LAYER ANALYSIS
         reasoning_parts = []
         if timeline_confidence > 0.7:
-            reasoning_parts.append(f"Strong emotional consistency: {timeline_dominant_emotion} in {timeline_confidence*100:.1f}%")
+            reasoning_parts.append(f"{timeline_dominant_emotion} in {timeline_confidence*100:.1f}%")
         else:
             reasoning_parts.append(f"Mixed state: {timeline_dominant_emotion} leads at {timeline_confidence*100:.1f}%")
         

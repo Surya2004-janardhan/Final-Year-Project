@@ -1,22 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import useMediaRecorder from './hooks/useMediaRecorder';
-import useProcessing from './hooks/useProcessing';
 import useDaemon from './hooks/useDaemon';
 import useSettings from './hooks/useSettings';
 
 import RecordingPanel from './components/RecordingPanel';
-import ProcessingLoader from './components/ProcessingLoader';
-import EmotionCards from './components/EmotionCards';
-import TemporalChart from './components/TemporalChart';
-import CognitiveInsights from './components/CognitiveInsights';
-import AIContent from './components/AIContent';
 import Chatbot from './components/Chatbot';
 import CalendarView from './components/CalendarView';
 import SettingsView from './components/SettingsView';
 import InterventionPopup from './components/InterventionPopup';
 import { logError, logInfo } from './utils/logger';
+import { classifyMediaError, queryMediaPermissionState } from './utils/mediaPermissions';
 
-import { Brain, LayoutDashboard, CalendarRange, SlidersHorizontal, MessageCircle, Activity, ChevronRight, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Brain, LayoutDashboard, CalendarRange, SlidersHorizontal, MessageCircle, Activity, ChevronRight, BellRing } from 'lucide-react';
 
 const ipc = typeof window !== 'undefined' && window.require
   ? window.require('electron').ipcRenderer
@@ -27,23 +21,33 @@ function hasUsableMusicPath(musicPath) {
   return typeof musicPath === 'string' && /[\\/]/.test(musicPath);
 }
 
+function formatMinutesLabel(value) {
+  const totalSeconds = Math.round(Number(value || 0) * 60);
+  if (totalSeconds <= 0) return '0 seconds';
+  if (totalSeconds < 60) return `${totalSeconds} seconds`;
+  if (totalSeconds % 60 === 0) {
+    const minutes = totalSeconds / 60;
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s`;
+}
+
 export default function App() {
-  const recorder = useMediaRecorder();
-  const processing = useProcessing();
   const { settings, loaded, save } = useSettings();
 
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const [phase, setPhase] = useState('idle');
-  const [manualMeta, setManualMeta] = useState(null);
-  const [manualPreviewUrl, setManualPreviewUrl] = useState(null);
   const [lastDaemonResult, setLastDaemonResult] = useState(null);
   const [musicNowPlaying, setMusicNowPlaying] = useState(null);
-  const [shiftToast, setShiftToast] = useState(null);
-  const daemonVideoRef = useRef(null);
+  const [permissionReady, setPermissionReady] = useState(false);
+  const [permissionError, setPermissionError] = useState(null);
+  const [testNotifyBusy, setTestNotifyBusy] = useState(false);
+  const [testNotifyStatus, setTestNotifyStatus] = useState('');
   const audioRef = useRef(null);
   const musicQueueRef = useRef([]);
   const musicPlayingRef = useRef(false);
-  const activeInsight = processing.results || lastDaemonResult;
+  const activeInsight = lastDaemonResult;
 
   const tryPlayNext = useCallback(() => {
     const audio = audioRef.current;
@@ -53,12 +57,6 @@ export default function App() {
 
     if (!hasUsableMusicPath(nextTrack.musicPath)) {
       logError('app', 'support track path is invalid', { emotion: nextTrack.emotion, musicPath: nextTrack.musicPath });
-      setShiftToast({
-        emotion: nextTrack.emotion,
-        autoPlay: false,
-        musicPath: nextTrack.musicPath,
-        error: 'Please remap this emotion to a local audio file from Settings.',
-      });
       setTimeout(() => tryPlayNext(), 150);
       return;
     }
@@ -68,6 +66,7 @@ export default function App() {
     const src = `${BACKEND_BASE_URL}/stream_local?path=${encodeURIComponent(nextTrack.musicPath)}`;
 
     audio.src = src;
+    logInfo('app', 'support track queued for playback', { emotion: nextTrack.emotion, musicPath: nextTrack.musicPath });
     logInfo('app', 'attempting in-app song playback', { emotion: nextTrack.emotion, musicPath: nextTrack.musicPath, src });
     audio.load();
     audio.play().catch((error) => {
@@ -77,14 +76,25 @@ export default function App() {
     });
   }, []);
 
-  const { isDaemonActive, daemonStatus, nextFireIn, liveStream, startDaemon, stopDaemon } = useDaemon({
+  const { isDaemonActive, daemonStatus, nextFireIn, startDaemon, stopDaemon } = useDaemon({
     settings,
     onNewResult: (result) => setLastDaemonResult(result),
     onShiftDetected: ({ emotion, musicPath, autoPlay }) => {
       logInfo('app', 'shift detected', { emotion, musicPath, autoPlay });
-      setShiftToast({ emotion, musicPath, autoPlay, error: null });
-      if (!autoPlay || !musicPath) return;
+      if (!autoPlay) {
+        logInfo('app', 'support playback skipped because auto-play is disabled', { emotion, musicPath });
+        return;
+      }
+      if (!musicPath) {
+        logError('app', 'support playback skipped because no music mapping exists', { emotion });
+        return;
+      }
       musicQueueRef.current.push({ emotion, musicPath, at: Date.now() });
+      logInfo('app', 'support track added to queue', {
+        emotion,
+        musicPath,
+        queueLength: musicQueueRef.current.length,
+      });
       tryPlayNext();
     },
   });
@@ -96,13 +106,15 @@ export default function App() {
   }, [loaded, settings.autoMode]); // eslint-disable-line
 
   useEffect(() => {
-    if (!daemonVideoRef.current) return;
-    daemonVideoRef.current.srcObject = liveStream || null;
-  }, [liveStream, daemonStatus]);
-
-  useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return undefined;
+
+    const handlePlaying = () => {
+      logInfo('app', 'audio element started playback', {
+        src: audio.currentSrc,
+        paused: audio.paused,
+      });
+    };
 
     const handleStop = () => {
       musicPlayingRef.current = false;
@@ -110,98 +122,57 @@ export default function App() {
       logInfo('app', 'song playback finished or reset');
       setTimeout(() => tryPlayNext(), 150);
     };
+    audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('ended', handleStop);
     audio.addEventListener('error', handleStop);
 
     return () => {
+      audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('ended', handleStop);
       audio.removeEventListener('error', handleStop);
     };
   }, [tryPlayNext]);
 
   useEffect(() => {
-    if (!ipc) return undefined;
-    const handleShiftToast = (_event, payload) => {
-      setShiftToast({
-        emotion: payload?.emotion,
-        musicPath: payload?.musicPath,
-        autoPlay: payload?.autoPlay,
-        error: null,
-      });
+    let active = true;
+    const refreshPermissionState = async () => {
+      const state = await queryMediaPermissionState();
+      if (!active) return;
+      const ready = state.camera === 'granted' && state.microphone === 'granted';
+      setPermissionReady(ready);
+      if (ready) {
+        setPermissionError(null);
+      }
     };
-
-    ipc.on('shift-toast', handleShiftToast);
+    refreshPermissionState();
+    const intervalId = setInterval(refreshPermissionState, 3000);
     return () => {
-      ipc.removeListener('shift-toast', handleShiftToast);
+      active = false;
+      clearInterval(intervalId);
     };
   }, []);
 
-  useEffect(() => {
-    if (!shiftToast) return undefined;
-    const timer = setTimeout(() => setShiftToast(null), 10000);
-    return () => clearTimeout(timer);
-  }, [shiftToast]);
-
-  useEffect(() => {
-    return () => {
-      if (manualPreviewUrl) URL.revokeObjectURL(manualPreviewUrl);
-    };
-  }, [manualPreviewUrl]);
-
-  const handleAnalyze = useCallback(async (input, type) => {
-    logInfo('app', 'manual analyze start', { type });
-    setPhase('processing');
-    const meta = recorder.lastCaptureMeta || {
-      startedAt: new Date().toISOString(),
-      endedAt: new Date().toISOString(),
-    };
-    setManualMeta(meta);
-
-    if (manualPreviewUrl) {
-      URL.revokeObjectURL(manualPreviewUrl);
-      setManualPreviewUrl(null);
+  const requestDashboardPermission = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setPermissionReady(true);
+      setPermissionError(null);
+      logInfo('app', 'dashboard camera+mic permission granted');
+    } catch (error) {
+      const kind = classifyMediaError(error);
+      const message = kind === 'permission_denied'
+        ? 'Please enable both camera and microphone access for EmotionAI.'
+        : kind === 'device_busy'
+          ? 'Camera or microphone is currently being used by another app.'
+          : kind === 'device_missing'
+            ? 'Camera or microphone was not found on this system.'
+            : (error?.message || 'Camera and microphone access could not be started.');
+      setPermissionReady(false);
+      setPermissionError(message);
+      logError('app', 'dashboard permission request failed', { error: error?.message, kind });
     }
-    if (type === 'blob' && input instanceof Blob) {
-      setManualPreviewUrl(URL.createObjectURL(input));
-    }
-
-    if (ipc) {
-      const status = await ipc.invoke('backend-status');
-      logInfo('app', 'backend status checked', status);
-      if (!status.running) {
-        logInfo('app', 'backend start requested for manual analyze');
-        await ipc.invoke('start-backend');
-        await new Promise(r => setTimeout(r, 4000));
-      }
-    }
-
-    let result = null;
-    if (type === 'file') result = await processing.processFile(input);
-    else result = await processing.processVideo(input);
-
-    if (ipc && result && !result.error) {
-      await ipc.invoke('save-result', {
-        ...result,
-        recording_started_at: meta.startedAt,
-        recording_ended_at: meta.endedAt,
-      });
-      logInfo('app', 'manual analyze result persisted', { emotion: result.fused_emotion });
-    }
-
-    logInfo('app', 'manual analyze finished', { type, emotion: result?.fused_emotion, error: result?.error });
-    setPhase('results');
-  }, [processing, recorder.lastCaptureMeta, manualPreviewUrl]);
-
-  const handleReset = () => {
-    logInfo('app', 'dashboard reset');
-    processing.reset();
-    if (manualPreviewUrl) {
-      URL.revokeObjectURL(manualPreviewUrl);
-      setManualPreviewUrl(null);
-    }
-    setManualMeta(null);
-    setPhase('idle');
-  };
+  }, []);
 
   const fmtCountdown = (secs) => {
     if (!secs) return '';
@@ -209,6 +180,32 @@ export default function App() {
     const s = Math.floor(secs % 60);
     return `${m}m ${s.toString().padStart(2, '0')}s`;
   };
+
+  const handleTestSystemNotification = useCallback(async () => {
+    if (!ipc || testNotifyBusy) return;
+    setTestNotifyBusy(true);
+    setTestNotifyStatus('');
+    logInfo('app', 'manual system notification test requested');
+    try {
+      const result = await ipc.invoke('notify-shift', {
+        emotion: 'test',
+        autoPlay: false,
+        musicPath: null,
+      });
+      if (result?.ok) {
+        setTestNotifyStatus('Windows notification sent.');
+        logInfo('app', 'manual system notification test succeeded');
+      } else {
+        setTestNotifyStatus(result?.error || 'Notification test failed.');
+        logError('app', 'manual system notification test failed', { error: result?.error || 'Unknown error' });
+      }
+    } catch (error) {
+      setTestNotifyStatus(error?.message || 'Notification test failed.');
+      logError('app', 'manual system notification test errored', { error: error?.message });
+    } finally {
+      setTestNotifyBusy(false);
+    }
+  }, [testNotifyBusy]);
 
   const daemonLabel = daemonStatus === 'recording'
     ? 'Recording...'
@@ -225,6 +222,7 @@ export default function App() {
     { id: 'calendar', label: 'History', icon: <CalendarRange className="w-4 h-4" /> },
     { id: 'assistant', label: 'AI Assistant', icon: <MessageCircle className="w-4 h-4" /> },
     { id: 'settings', label: 'Settings', icon: <SlidersHorizontal className="w-4 h-4" /> },
+    { id: 'testing', label: 'Testing', icon: <BellRing className="w-4 h-4" /> },
   ];
 
   if (!loaded) return (
@@ -239,36 +237,6 @@ export default function App() {
   return (
     <div className="flex h-screen overflow-hidden bg-bg-base text-text-primary">
       <InterventionPopup results={activeInsight} />
-      {shiftToast && (
-        <div className="fixed top-4 right-4 z-50 w-[min(92vw,380px)] animate-fade-up">
-          <div className="rounded-2xl border border-primary/20 bg-surface-base/95 backdrop-blur-xl shadow-2xl p-4 space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Emotional Shift</p>
-                <p className="text-sm font-black capitalize text-text-primary">{shiftToast.emotion || 'Unknown'}</p>
-              </div>
-              <button
-                onClick={() => setShiftToast(null)}
-                className="w-8 h-8 rounded-lg border border-border-subtle text-text-muted hover:text-text-primary hover:bg-surface-raised cursor-pointer"
-              >
-                ×
-              </button>
-            </div>
-            <p className="text-xs leading-relaxed text-text-secondary">
-              {shiftToast.error
-                ? shiftToast.error
-                : shiftToast.autoPlay
-                  ? 'Support playback was triggered for this emotion.'
-                  : 'Support playback is ready. Open the app and start it when you need it.'}
-            </p>
-            {shiftToast.musicPath && (
-              <p className="text-[11px] font-mono text-text-muted truncate" title={shiftToast.musicPath}>
-                {shiftToast.musicPath}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
 
       <aside className="w-56 shrink-0 flex flex-col border-r border-border-subtle bg-surface-base">
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-border-subtle">
@@ -334,7 +302,7 @@ export default function App() {
                 )}
                 {daemonStatus === 'paused_device_busy' && (
                   <p className="text-[10px] text-amber-600 leading-relaxed">
-                    Camera or microphone is busy in another app. Auto mode will try again on the next interval.
+                    Camera or microphone is busy in another app. Auto mode will try again after they are free.
                   </p>
                 )}
                 {musicNowPlaying && (
@@ -345,7 +313,7 @@ export default function App() {
               </div>
             ) : (
               <p className="text-[10px] text-text-muted leading-relaxed">
-                Runs every {settings.intervalMinutes} min, records {settings.recordDurationMinutes} min
+                Runs every {formatMinutesLabel(settings.intervalMinutes)}, records {formatMinutesLabel(settings.recordDurationMinutes)}
               </p>
             )}
           </div>
@@ -365,99 +333,18 @@ export default function App() {
                 <p className="text-sm text-text-muted mt-1">Track emotion-driven stress patterns for workplace well-being over time.</p>
               </div>
 
-              {phase === 'idle' && (
-                <RecordingPanel
-                  recorder={recorder}
-                  onAnalyze={handleAnalyze}
-                  isProcessing={processing.isProcessing}
-                />
-              )}
+              <RecordingPanel
+                autoMode={settings.autoMode}
+                daemonStatus={daemonStatus}
+                nextFireLabel={nextFireIn && daemonStatus === 'waiting' ? fmtCountdown(nextFireIn) : ''}
+                permissionReady={permissionReady}
+                permissionError={permissionError}
+                requestPermission={requestDashboardPermission}
+                intervalLabel={formatMinutesLabel(settings.intervalMinutes)}
+                recordDurationLabel={formatMinutesLabel(settings.recordDurationMinutes)}
+              />
 
-              {phase === 'processing' && processing.isProcessing && (
-                <ProcessingLoader
-                  progress={processing.progress}
-                  status={processing.status}
-                  previewUrl={manualPreviewUrl}
-                  recordingMeta={manualMeta}
-                />
-              )}
-
-              {isDaemonActive && (daemonStatus === 'recording' || daemonStatus === 'processing') && (
-                <div className="panel p-5 border border-primary/30 bg-gradient-to-br from-surface-base to-surface-raised">
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-primary animate-pulse" />
-                    <span className="text-xs font-bold uppercase tracking-widest text-text-primary">
-                      {daemonStatus === 'recording' ? 'Background Recording Live' : 'Recording Complete · Processing'}
-                    </span>
-                  </div>
-                    <div className="px-3 py-1 rounded-full bg-surface-base border border-border-subtle text-[11px] font-bold text-text-secondary">
-                      {daemonStatus === 'recording' ? 'Mic + camera in use' : 'Backend analyzing clip'}
-                    </div>
-                  </div>
-                  <div className="relative rounded-2xl overflow-hidden border border-border-subtle bg-slate-950">
-                    {daemonStatus === 'recording' ? (
-                      <video
-                        ref={daemonVideoRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        className="w-full max-h-[280px] object-cover"
-                      />
-                    ) : (
-                      <div className="h-[220px] flex flex-col items-center justify-center text-center gap-3 text-sm text-white/80 px-6">
-                        <div className="w-12 h-12 rounded-full border-2 border-primary/40 border-t-primary animate-spin" />
-                        <div>
-                          <p className="font-semibold text-white">Processing captured stream in background</p>
-                          <p className="text-xs text-white/60 mt-1">The next wait cycle is already running while Flask completes this analysis.</p>
-                        </div>
-                      </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-4 py-4">
-                      <div className="flex items-end justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Auto Monitor</p>
-                          <p className="text-sm font-semibold text-white">
-                            {daemonStatus === 'recording' ? 'Live capture is active' : 'Capture finished, results incoming'}
-                          </p>
-                        </div>
-                        <div className="px-3 py-1 rounded-full bg-black/55 text-[11px] font-bold text-white uppercase tracking-wider">
-                          {daemonStatus}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {processing.error && (
-                <div className="panel p-6 text-center space-y-3 border-red-500/30">
-                  <AlertTriangle className="w-8 h-8 text-red-500 mx-auto" />
-                  <p className="text-sm font-medium text-red-500">{processing.error}</p>
-                  <button onClick={handleReset} className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-surface-raised text-sm font-bold border border-border-subtle cursor-pointer hover:bg-surface-raised/80 transition-all">
-                    <RotateCcw className="w-4 h-4" /> Try Again
-                  </button>
-                </div>
-              )}
-
-              {phase === 'results' && processing.results && (
-                <div className="space-y-8 stagger">
-                  <CognitiveInsights results={processing.results} />
-                  <EmotionCards results={processing.results} />
-                  <TemporalChart results={processing.results} />
-                  <div className="border-t border-border-subtle pt-8">
-                    <AIContent results={processing.results} />
-                  </div>
-                  <div className="flex justify-center pt-4">
-                    <button onClick={handleReset} className="group flex items-center gap-2 px-8 py-3 rounded-xl bg-surface-raised text-sm font-bold border border-border-subtle hover:border-primary/40 hover:text-primary transition-all cursor-pointer">
-                      <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-                      New Session
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {lastDaemonResult && !processing.results && phase === 'idle' && (
+              {lastDaemonResult && (
                 <div className="panel p-5 border border-border-subtle animate-fade-up">
                   <div className="flex items-center gap-2 mb-3">
                     <Activity className="w-4 h-4 text-primary animate-pulse" />
@@ -483,6 +370,48 @@ export default function App() {
 
           {currentTab === 'settings' && (
             <SettingsView settings={settings} onSave={save} />
+          )}
+
+          {currentTab === 'testing' && (
+            <div className="space-y-8 animate-fade-up pb-12">
+              <div>
+                <h1 className="text-2xl font-black text-text-primary">Testing</h1>
+                <p className="text-sm text-text-muted mt-1">Use this page to verify native Windows notifications without waiting for the monitoring cycle.</p>
+              </div>
+
+              <section className="panel p-6 space-y-5 max-w-2xl">
+                <div className="flex items-center gap-3 pb-3 border-b border-border-subtle">
+                  <BellRing className="w-5 h-5 text-primary" />
+                  <div>
+                    <h2 className="text-base font-bold text-text-primary">System Notification Test</h2>
+                    <p className="text-xs text-text-muted">This triggers the Electron native notification handler directly.</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleTestSystemNotification}
+                  disabled={testNotifyBusy}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-primary text-white text-sm font-bold cursor-pointer hover:opacity-90 transition-all disabled:opacity-50"
+                >
+                  {testNotifyBusy ? (
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <BellRing className="w-4 h-4" />
+                  )}
+                  Send Windows Notification
+                </button>
+
+                <p className="text-sm text-text-secondary leading-relaxed">
+                  Expected result: a native Windows toast should appear even if the app window is not focused.
+                </p>
+
+                {testNotifyStatus && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-text-primary">
+                    {testNotifyStatus}
+                  </div>
+                )}
+              </section>
+            </div>
           )}
 
           {currentTab === 'assistant' && (

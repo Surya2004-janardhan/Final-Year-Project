@@ -209,6 +209,14 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
         };
 
         const shouldNotify = detectShift(emotion);
+        const previousEmotion = recentEmotions.current[recentEmotions.current.length - 1] || null;
+        logInfo('daemon', 'notification decision evaluated', {
+          emotion,
+          previousEmotion,
+          shouldNotify,
+          notifyPermission: settingsRef.current?.notifyPermission,
+          musicPath: settingsRef.current?.musicMappings?.[emotion] || null,
+        });
 
         recentEmotions.current.push(emotion);
         if (recentEmotions.current.length > 5) recentEmotions.current.shift();
@@ -219,6 +227,12 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
 
         if (shouldNotify) {
           await triggerNotification(emotion);
+        } else {
+          logInfo('daemon', 'notification skipped', {
+            emotion,
+            previousEmotion,
+            reason: 'shift detector did not mark this reading as a notify event',
+          });
         }
       } catch (err) {
         logError('daemon', 'background processing error', { error: err.message });
