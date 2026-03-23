@@ -7,7 +7,7 @@ This project has two major runtime parts:
 - A Windows-focused Electron desktop app with a React renderer for dashboard, history, assistant, and settings
 - A Flask backend that handles video/audio processing, emotion inference, cognitive summaries, chat, history analysis, and local media streaming
 
-The system can run in manual mode or background auto mode. In auto mode, the desktop app records at user-defined intervals, processes captured media in the background, stores results locally, detects significant negative shifts, shows a system notification, and can auto-play a mapped support song.
+The system can run in manual mode or background auto mode. In auto mode, the desktop app records at user-defined intervals, processes captured media in the background, stores results locally, detects significant negative shifts, shows a system notification, and can auto-play a user-mapped local support song.
 
 ## Table of Contents
 
@@ -58,7 +58,7 @@ At runtime, EmotionAI can:
 - generate AI support content through Groq
 - save results locally for history and time-based analysis
 - show Windows system notifications when emotional shift rules are triggered
-- optionally auto-play a mapped support track
+- optionally auto-play a user-mapped local support track
 
 Supported emotion classes:
 
@@ -91,7 +91,7 @@ Electron Desktop App
       |- Settings
       |- Manual recording and upload
       |- Background daemon
-      |- In-app playback for support tracks
+      |- In-app playback for user-mapped local support tracks
       |
       v
 Flask Backend (app.py)
@@ -101,7 +101,6 @@ Flask Backend (app.py)
   |- /analyze_history
   |- /chat
   |- /mappings
-  |- /music/search
   |- /stream_local
   |
   v
@@ -110,8 +109,7 @@ ML and Service Layer
   |- OpenCV
   |- Librosa
   |- FFmpeg
-  |- Groq API
-  |- Saavn API
+  `- Groq API
 ```
 
 ## 4. End-to-End Runtime Flow
@@ -146,7 +144,7 @@ User enables auto mode
   -> result is saved to local results store
   -> shift detection compares recent emotional states
   -> if shift detected, Electron sends system notification
-  -> if auto-play is enabled and a song is mapped, app streams and plays it in-app
+  -> if auto-play is enabled and a song is mapped, app streams and plays the local file in-app
 ```
 
 ### History analysis flow
@@ -172,7 +170,7 @@ The backend lives primarily in [app.py](/c:/Users/chint/Desktop/4-2/4-2-project/
 - define the MobileNetV2-based video feature extractor
 - manage progress state for long-running jobs
 - process uploaded or background-recorded media
-- serve music and local files
+- serve local files needed by the desktop app
 - generate AI summaries and assistant responses
 
 ### Backend libraries
@@ -269,7 +267,7 @@ The desktop app lives under [frontend](/c:/Users/chint/Desktop/4-2/4-2-project/f
 - assistant chat experience
 - auto mode monitoring
 - history and time-range analysis
-- local in-app playback of support tracks
+- local in-app playback of user-mapped support tracks
 
 ### Main hooks
 
@@ -491,17 +489,9 @@ Accepts:
 
 Returns an assistant reply.
 
-### `GET /music/search?q=...`
-
-Searches the Saavn API, caches audio when possible, and returns song metadata and a preview path.
-
-### `GET /downloaded_music/<filename>`
-
-Serves cached local music files from the backend cache.
-
 ### `GET /stream_local?path=...`
 
-Streams a local absolute path. The desktop app uses this for in-app playback of mapped intervention songs.
+Streams a local absolute path. The desktop app uses this for in-app playback of user-mapped intervention songs.
 
 ## 11. Repository Map
 
