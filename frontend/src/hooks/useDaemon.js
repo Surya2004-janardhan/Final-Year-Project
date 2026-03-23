@@ -12,6 +12,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { logError, logInfo } from '../utils/logger';
+import { classifyMediaError, queryMediaPermissionState } from '../utils/mediaPermissions';
 
 const ipc = typeof window !== 'undefined' && window.require
   ? window.require('electron').ipcRenderer
@@ -32,6 +33,7 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
   const [daemonStatus, setDaemonStatus] = useState('idle');
   const [nextFireIn, setNextFireIn] = useState(null);
   const [liveStream, setLiveStream] = useState(null);
+  const permissionGateRef = useRef('unknown');
 
   const timeoutRef = useRef(null);
   const countdownRef = useRef(null);
@@ -43,17 +45,57 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
+  const evaluateMediaAccess = useCallback(async () => {
+    const state = await queryMediaPermissionState();
+    const bothGranted = state.camera === 'granted' && state.microphone === 'granted';
+    permissionGateRef.current = bothGranted
+      ? 'granted'
+      : (state.camera === 'denied' || state.microphone === 'denied' ? 'denied' : 'unknown');
+    return { state, bothGranted };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let intervalId = null;
+    const refreshPermissions = async () => {
+      const { state } = await evaluateMediaAccess();
+      if (!active) return;
+      if (!activeRef.current) return;
+      const bothGranted = state.camera === 'granted' && state.microphone === 'granted';
+      if (!bothGranted) {
+        setDaemonStatus('permission_required');
+      } else if (activeRef.current) {
+        setDaemonStatus((current) => {
+          if (['recording', 'paused_device_busy'].includes(current)) return current;
+          if (current === 'permission_required') {
+            setTimeout(() => {
+              if (activeRef.current) {
+                loopRef.current?.();
+              }
+            }, 0);
+          }
+          return 'waiting';
+        });
+      }
+    };
+    refreshPermissions();
+    intervalId = setInterval(refreshPermissions, 3000);
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
+  }, [evaluateMediaAccess]);
+
   const requestStream = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
       setLiveStream(stream);
+      permissionGateRef.current = 'granted';
       logInfo('daemon', 'stream acquired with audio');
       return stream;
-    } catch {
-      const stream = await navigator.mediaDevices.getUserMedia({ ...MEDIA_CONSTRAINTS, audio: false });
-      setLiveStream(stream);
-      logInfo('daemon', 'stream acquired without audio fallback');
-      return stream;
+    } catch (error) {
+      const kind = classifyMediaError(error);
+      throw Object.assign(error instanceof Error ? error : new Error(error?.message || 'Media request failed'), { mediaKind: kind });
     }
   };
 
@@ -189,8 +231,18 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
     let stream = null;
     let startedAt = null;
     let endedAt = null;
+    let keepPausedStatus = false;
 
     try {
+      const { state: permissionState, bothGranted } = await evaluateMediaAccess();
+
+      if (!bothGranted) {
+        setDaemonStatus('permission_required');
+        keepPausedStatus = true;
+        logInfo('daemon', 'session paused waiting for camera+microphone permission', permissionState);
+        return;
+      }
+
       startedAt = new Date().toISOString();
       stream = await requestStream();
       setDaemonStatus('recording');
@@ -209,14 +261,25 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
         endedAt,
       });
     } catch (err) {
-      logError('daemon', 'session error', { error: err.message });
+      if (err?.mediaKind === 'device_busy') {
+        setDaemonStatus('paused_device_busy');
+        keepPausedStatus = true;
+        logInfo('daemon', 'session paused because camera or microphone is busy', { error: err.message });
+      } else if (err?.mediaKind === 'permission_denied') {
+        setDaemonStatus('permission_required');
+        permissionGateRef.current = 'denied';
+        keepPausedStatus = true;
+        logInfo('daemon', 'session paused because permission was denied', { error: err.message });
+      } else {
+        logError('daemon', 'session error', { error: err.message });
+      }
     } finally {
       releaseStream(stream);
-      if (activeRef.current) {
+      if (activeRef.current && !keepPausedStatus) {
         setDaemonStatus('waiting');
       }
     }
-  }, [recordForDuration, processRecordingInBackground]);
+  }, [recordForDuration, processRecordingInBackground, evaluateMediaAccess]);
 
   const beginCountdown = useCallback((intervalMs) => {
     clearInterval(countdownRef.current);
@@ -249,14 +312,23 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
   const startDaemon = useCallback(() => {
     if (isDaemonActive || activeRef.current) return;
     setIsDaemonActive(true);
-    setDaemonStatus('waiting');
     recentEmotions.current = [];
     activeRef.current = true;
-    loopRef.current?.();
+    void (async () => {
+      const { bothGranted, state } = await evaluateMediaAccess();
+      if (!activeRef.current) return;
+      if (!bothGranted) {
+        setDaemonStatus('permission_required');
+        logInfo('daemon', 'daemon waiting for immediate permission grant', state);
+        return;
+      }
+      setDaemonStatus('waiting');
+      loopRef.current?.();
+    })();
 
     console.log(`[Daemon] Started. Interval: ${settingsRef.current.intervalMinutes} min, Duration: ${settingsRef.current.recordDurationMinutes} min`);
     logInfo('daemon', 'daemon started', { intervalMinutes: settingsRef.current.intervalMinutes, recordDurationMinutes: settingsRef.current.recordDurationMinutes });
-  }, [isDaemonActive]);
+  }, [isDaemonActive, evaluateMediaAccess]);
 
   const stopDaemon = useCallback(() => {
     logInfo('daemon', 'daemon stop requested');

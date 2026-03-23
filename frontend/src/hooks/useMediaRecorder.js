@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { logError, logInfo, logWarn } from '../utils/logger';
+import { logError, logInfo } from '../utils/logger';
+import { classifyMediaError, queryMediaPermissionState } from '../utils/mediaPermissions';
 
 const MEDIA_CONSTRAINTS = {
   video: {
@@ -15,6 +16,7 @@ export default function useMediaRecorder() {
   const [stream, setStream] = useState(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [permissionError, setPermissionError] = useState(null);
+  const [permissionState, setPermissionState] = useState('unknown');
   const [lastCaptureMeta, setLastCaptureMeta] = useState(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -33,11 +35,29 @@ export default function useMediaRecorder() {
     }
   }, [stream]);
 
+  useEffect(() => {
+    let active = true;
+    const loadPermissionState = async () => {
+      const state = await queryMediaPermissionState();
+      if (!active) return;
+      const bothGranted = state.camera === 'granted' && state.microphone === 'granted';
+      setPermissionState(bothGranted ? 'granted' : (state.camera === 'denied' || state.microphone === 'denied' ? 'denied' : 'unknown'));
+      if (!bothGranted && !stream) {
+        setHasPermission(false);
+      }
+    };
+    loadPermissionState();
+    return () => {
+      active = false;
+    };
+  }, [stream]);
+
   const requestPermission = useCallback(async () => {
     try {
       const s = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
       setStream(s);
       setHasPermission(true);
+      setPermissionState('granted');
       setPermissionError(null);
       logInfo('recorder', 'camera+mic permission granted');
       if (videoRef.current) {
@@ -45,23 +65,19 @@ export default function useMediaRecorder() {
       }
       return s;
     } catch (err) {
-      logWarn('recorder', 'camera+mic permission denied, trying camera-only fallback', { error: err.message });
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({ ...MEDIA_CONSTRAINTS, audio: false });
-        setStream(s);
-        setHasPermission(true);
-        setPermissionError('Microphone unavailable. Using camera-only mode.');
-        logWarn('recorder', 'camera-only fallback granted');
-        if (videoRef.current) {
-          videoRef.current.srcObject = s;
-        }
-        return s;
-      } catch (fallbackErr) {
-        logError('recorder', 'camera fallback denied', { error: fallbackErr?.message || 'Camera/microphone access blocked.' });
-        setHasPermission(false);
-        setPermissionError(fallbackErr?.message || 'Camera/microphone access blocked.');
-        return null;
-      }
+      const kind = classifyMediaError(err);
+      const message = kind === 'permission_denied'
+        ? 'Please enable both camera and microphone access for EmotionAI.'
+        : kind === 'device_busy'
+          ? 'Camera or microphone is currently being used by another app. Close that app and try again.'
+          : kind === 'device_missing'
+            ? 'Camera or microphone was not found on this system.'
+            : (err?.message || 'Camera/microphone access blocked.');
+      logError('recorder', 'camera+mic request failed', { error: err?.message, kind });
+      setHasPermission(false);
+      setPermissionState(kind === 'permission_denied' ? 'denied' : 'unknown');
+      setPermissionError(message);
+      return null;
     }
   }, []);
 
@@ -71,7 +87,6 @@ export default function useMediaRecorder() {
       stream.getTracks().forEach(t => t.stop());
       setStream(null);
       setHasPermission(false);
-      setPermissionError(null);
       if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
@@ -140,6 +155,7 @@ export default function useMediaRecorder() {
     isRecording,
     stream,
     hasPermission,
+    permissionState,
     permissionError,
     lastCaptureMeta,
     videoRef: setVideoElement,

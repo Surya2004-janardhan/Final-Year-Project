@@ -167,6 +167,16 @@ export default function App() {
     return `${m}m ${s.toString().padStart(2, '0')}s`;
   };
 
+  const daemonLabel = daemonStatus === 'recording'
+    ? 'Recording...'
+    : daemonStatus === 'processing'
+      ? 'Analyzing...'
+      : daemonStatus === 'permission_required'
+        ? 'Permission Required'
+        : daemonStatus === 'paused_device_busy'
+          ? 'Paused: Device Busy'
+          : 'Monitoring';
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'calendar', label: 'History', icon: <CalendarRange className="w-4 h-4" /> },
@@ -238,11 +248,21 @@ export default function App() {
                 <div className="flex items-center gap-1.5">
                   <Activity className="w-3 h-3 text-green-500 animate-pulse" />
                   <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">
-                    {daemonStatus === 'recording' ? 'Recording...' : daemonStatus === 'processing' ? 'Analyzing...' : 'Monitoring'}
+                    {daemonLabel}
                   </span>
                 </div>
                 {nextFireIn && daemonStatus === 'waiting' && (
                   <p className="text-[10px] text-text-muted">Next: {fmtCountdown(nextFireIn)}</p>
+                )}
+                {daemonStatus === 'permission_required' && (
+                  <p className="text-[10px] text-amber-600 leading-relaxed">
+                    Enable both camera and microphone once to let auto mode start.
+                  </p>
+                )}
+                {daemonStatus === 'paused_device_busy' && (
+                  <p className="text-[10px] text-amber-600 leading-relaxed">
+                    Camera or microphone is busy in another app. Auto mode will try again on the next interval.
+                  </p>
                 )}
                 {musicNowPlaying && (
                   <p className="text-[10px] text-primary font-semibold">
