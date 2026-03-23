@@ -44,6 +44,8 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
   const recordingRef = useRef(null);
   const processingTasksRef = useRef(new Set());
   const recentEmotions = useRef([]);
+  const consecutiveEmotionRef = useRef(null);
+  const consecutiveCountRef = useRef(0);
   const activeRef = useRef(false);
   const loopRef = useRef(null);
   const settingsRef = useRef(settings);
@@ -260,9 +262,33 @@ export default function useDaemon({ settings, onNewResult, onShiftDetected }) {
             recording_ended_at: endedAt,
           };
 
-          const shouldNotify = detectShift(emotion);
+          // Update consecutive detection counters
+          if (consecutiveEmotionRef.current === emotion) {
+            consecutiveCountRef.current += 1;
+          } else {
+            consecutiveEmotionRef.current = emotion;
+            consecutiveCountRef.current = 1;
+          }
+
           const previousEmotion =
             recentEmotions.current[recentEmotions.current.length - 1] || null;
+
+          // Policy:
+          // - Immediate notify for these emotions.
+          // - Require N consecutive runs for slower-to-act emotions.
+          const IMMEDIATE_EMOTIONS = new Set(["happy", "sad", "angry", "fearful"]);
+          const DELAYED_EMOTIONS = new Set(["neutral", "disgust"]);
+
+          let shouldNotify = false;
+          if (IMMEDIATE_EMOTIONS.has(emotion)) {
+            shouldNotify = true;
+          } else if (DELAYED_EMOTIONS.has(emotion)) {
+            // require at least 3 consecutive detections
+            shouldNotify = consecutiveCountRef.current >= 3;
+          } else {
+            // fallback to previous shift-detection logic for other cases
+            shouldNotify = detectShift(emotion);
+          }
           logInfo("daemon", "notification decision evaluated", {
             emotion,
             previousEmotion,
