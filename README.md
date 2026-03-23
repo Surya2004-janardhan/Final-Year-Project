@@ -1,398 +1,738 @@
 # EmotionAI
 
-EmotionAI is a desktop-first multimodal emotion monitoring system.
+EmotionAI is a desktop-first multimodal emotion and stress-support system. It combines webcam video, microphone audio, TensorFlow inference, temporal reasoning, local history tracking, background monitoring, and AI-generated guidance to help a user understand emotional shifts over time.
 
-At runtime, the Electron app captures webcam + microphone input, sends video to a Flask backend, runs audio/video emotion inference, generates cognitive summaries and LLM content, stores historical results locally, and can trigger native intervention notifications when negative emotional shifts are detected.
+This project has two major runtime parts:
 
-## 1) System-Level Architecture
+- A Windows-focused Electron desktop app with a React renderer for dashboard, history, assistant, and settings
+- A Flask backend that handles video/audio processing, emotion inference, cognitive summaries, chat, history analysis, and local media streaming
 
-### 1.1 Context Diagram (L0)
+The system can run in manual mode or background auto mode. In auto mode, the desktop app records at user-defined intervals, processes captured media in the background, stores results locally, detects significant negative shifts, shows a system notification, and can auto-play a mapped support song.
+
+## Table of Contents
+
+- [1. Project Goal](#1-project-goal)
+- [2. What the System Does](#2-what-the-system-does)
+- [3. High-Level Architecture](#3-high-level-architecture)
+- [4. End-to-End Runtime Flow](#4-end-to-end-runtime-flow)
+- [5. Backend Architecture](#5-backend-architecture)
+- [6. Frontend and Desktop Architecture](#6-frontend-and-desktop-architecture)
+- [7. Emotion and Stress Logic](#7-emotion-and-stress-logic)
+- [8. AI Layers](#8-ai-layers)
+- [9. Persistence and Data Storage](#9-persistence-and-data-storage)
+- [10. API Reference](#10-api-reference)
+- [11. Repository Map](#11-repository-map)
+- [12. Important Components](#12-important-components)
+- [13. Training and Research Assets](#13-training-and-research-assets)
+- [14. Setup](#14-setup)
+- [15. How to Run](#15-how-to-run)
+- [16. Logging and Observability](#16-logging-and-observability)
+- [17. Known Constraints](#17-known-constraints)
+- [18. Future Improvements](#18-future-improvements)
+
+## 1. Project Goal
+
+The goal of EmotionAI is not just to classify an emotion label like `happy` or `sad`. The goal is to:
+
+- detect emotional state using both face and voice
+- track how that state changes over time
+- identify stress-related shifts and instability
+- preserve a local history of sessions
+- generate understandable summaries for the user
+- offer supportive interventions such as songs, books, videos, quotes, stories, and assistant responses
+
+This project is designed around the idea that emotional change matters more than a single point-in-time prediction.
+
+## 2. What the System Does
+
+At runtime, EmotionAI can:
+
+- capture webcam and microphone input
+- record manually or automatically in the background
+- normalize video with FFmpeg
+- extract audio features with Librosa
+- run video inference with TensorFlow/Keras
+- run audio inference with TensorFlow/Keras
+- aggregate temporal predictions into a dominant emotional state
+- estimate a coarse stress score and stress label
+- generate AI support content through Groq
+- save results locally for history and time-based analysis
+- show Windows system notifications when emotional shift rules are triggered
+- optionally auto-play a mapped support track
+
+Supported emotion classes:
+
+- `neutral`
+- `happy`
+- `sad`
+- `angry`
+- `fearful`
+- `disgust`
+- `surprised`
+
+## 3. High-Level Architecture
 
 ```text
 User
   |
-  | opens app / enables auto mode / views history
   v
-Electron App (React UI + Electron Main)
-  |                         | \
-  | HTTP                    |  \ IPC + filesystem persistence
-  v                         |   \
-Flask Backend (app.py)      |    -> settings.json / results.json / analyses/*.json (userData)
-  |                         |
-  | uses                    |
-  v                         |
-TensorFlow Models           |
-(audio_emotion_model.h5,    |
- video_emotion_model.h5)    |
+Electron Desktop App
+  |- Electron Main Process
+  |   |- launches BrowserWindow
+  |   |- manages tray lifecycle
+  |   |- starts Flask backend on demand
+  |   |- stores persistent settings/results/analysis cache
+  |   |- shows native notifications
   |
-  | external HTTP
+  `- React Renderer
+      |- Dashboard
+      |- History
+      |- AI Assistant
+      |- Settings
+      |- Manual recording and upload
+      |- Background daemon
+      |- In-app playback for support tracks
+      |
+      v
+Flask Backend (app.py)
+  |- /process
+  |- /status
+  |- /history
+  |- /analyze_history
+  |- /chat
+  |- /mappings
+  |- /music/search
+  |- /stream_local
+  |
   v
-Groq API + Saavn API
+ML and Service Layer
+  |- TensorFlow/Keras models
+  |- OpenCV
+  |- Librosa
+  |- FFmpeg
+  |- Groq API
+  |- Saavn API
 ```
 
-### 1.2 Backend Component Diagram (L1)
+## 4. End-to-End Runtime Flow
+
+### Manual analysis flow
 
 ```text
-Flask API Layer
-  |- /process            -> core multimodal pipeline
-  |- /status             -> progress polling state
-  |- /history, /mappings -> SQLite storage access
-  |- /analyze_history    -> LLM trend analysis
-  |- /chat               -> LLM therapist assistant
-  |- /music/search       -> song lookup + local cache
-
-Core Processing Services
-  |- FFmpeg normalization + audio extraction
-  |- Video segmentation (OpenCV)
-  |- Audio MFCC extraction (librosa)
-  |- Batch inference (TensorFlow/Keras)
-  |- Timeline aggregation + cognitive metrics
-
-Persistence Services
-  |- SQLite: history, music_mappings
-  |- Local file cache: music/*.mp3
-
-External Integrations
-  |- Groq chat completions API
-  |- saavn.sumit.co search API
+User records or uploads video
+  -> React sends POST /process
+  -> Flask saves raw media to temp files
+  -> Flask normalizes the video with FFmpeg
+  -> Flask extracts mono 16 kHz audio
+  -> Flask validates human face presence
+  -> Flask creates temporal video and audio segments
+  -> Flask runs model inference
+  -> Flask builds temporal emotion sequences
+  -> Flask computes confidence, stability, transitions, and stress
+  -> Flask asks Groq for support content
+  -> Flask stores history in SQLite
+  -> React displays dashboard cards, charts, insights, and content
 ```
 
-### 1.3 Desktop Runtime Architecture (L1)
+### Auto mode flow
 
 ```text
-Electron Main (frontend/main.cjs)
-  |- Launches BrowserWindow + Tray
-  |- Spawns backend child process: python app.py
-  |- IPC for settings/history/cache/notifications
-
-React Renderer (frontend/src)
-  |- Dashboard, Settings, History, Chat
-  |- Manual processing (upload/record)
-  |- Auto-mode daemon (interval capture + background analysis)
+User enables auto mode
+  -> useDaemon starts a wait timer
+  -> after interval, app records webcam + mic for configured duration
+  -> recording ends
+  -> next interval countdown begins immediately
+  -> captured clip is processed in the background
+  -> result is saved to local results store
+  -> shift detection compares recent emotional states
+  -> if shift detected, Electron sends system notification
+  -> if auto-play is enabled and a song is mapped, app streams and plays it in-app
 ```
 
-## 2) End-to-End Processing Flow
-
-### 2.1 Manual Analysis Sequence
+### History analysis flow
 
 ```text
-React UI -> POST /process (video blob/file)
-Flask:
-  1. save upload (temp_raw_video.webm)
-  2. normalize container (ffmpeg -> temp_video.mp4)
-  3. extract mono 16k audio (temp_audio.wav)
-  4. create overlapping 1s windows every 0.5s
-  5. video path: sample frames -> MobileNetV2 feature extractor -> video model
-  6. audio path: MFCC windows -> audio model
-  7. aggregate timeline -> dominant emotion + stability + transitions
-  8. generate LLM content (or fallback templates)
-  9. persist history row in SQLite
- 10. cleanup temp files
- 11. return JSON result
-React UI -> polls /status for progress until complete
+User opens History tab
+  -> React loads persistent results
+  -> range filters group data by today, week, month, or all time
+  -> charts and summaries are computed locally
+  -> user can run AI trend analysis for current range
+  -> Flask sends selected history to Groq
+  -> summary is returned and cached locally
 ```
 
-### 2.2 Auto Mode (Background Daemon) Sequence
+## 5. Backend Architecture
 
-```text
-User enables Auto Mode
-  -> useDaemon starts interval timer
-  -> MediaRecorder captures webcam+mic for recordDurationMinutes
-  -> sends blob to /process in background
-  -> saves result via Electron IPC (results.json)
-  -> compares latest emotion with rolling buffer
-  -> if negative shift detected: native OS notification
-     (ask-first or auto-play mapped local audio)
-```
+The backend lives primarily in [app.py](/c:/Users/chint/Desktop/4-2/4-2-project/app.py).
 
-## 3) Backend Deep Dive
+### Core responsibilities
 
-### 3.1 Model Loading and Runtime Initialization
+- initialize SQLite tables
+- load the audio and video emotion models
+- define the MobileNetV2-based video feature extractor
+- manage progress state for long-running jobs
+- process uploaded or background-recorded media
+- serve music and local files
+- generate AI summaries and assistant responses
 
-At backend startup (`app.py`):
-- Initializes SQLite tables (`history`, `music_mappings`)
-- Loads models once:
-  - `models/audio_emotion_model.h5`
-  - `models/video_emotion_model.h5`
-- Builds a MobileNetV2 feature extractor (`112x112x3`, ImageNet, frozen)
-- Initializes global status object for progress polling
-- Reads `GROQ_API_KEY` from environment
+### Backend libraries
 
-If model loading fails, `/process` returns `{"error": "Models not loaded"}`.
+- Flask
+- Flask-CORS
+- TensorFlow / Keras
+- OpenCV
+- NumPy
+- Librosa
+- ffmpeg-python
+- requests
+- sqlite3
 
-### 3.2 Input/Feature Configuration
+### Model loading
 
-Audio constants:
-- Sample rate: `16000`
-- MFCCs: `13`
-- Hop length: `512`
-- Window size: `25ms`
-- Hop size: `10ms`
-- Frames per sample: `300`
+At startup, the backend loads:
 
-Video constants:
-- Segment window: `1s`
-- Segment stride: `0.5s`
-- Frames per segment: `10`
-- Frame size: `112x112`
+- `models/audio_emotion_model.h5`
+- `models/video_emotion_model.h5`
+- a frozen `MobileNetV2` feature extractor for frame embeddings
 
-Emotion classes (7):
-- `neutral, happy, sad, angry, fearful, disgust, surprised`
+If model loading fails, processing is blocked and `/process` returns an error.
 
-### 3.3 Timeline Aggregation Logic
+### Media preprocessing
 
-For each segment, backend produces modality predictions and converts them to temporal emotion labels.
+When `/process` is called:
 
-Current dominant-emotion selection behavior in `app.py`:
-- If both audio + video timelines exist, dominant timeline is derived from **video timeline** (`combined_emotions = video_emotions_temporal`)
-- Otherwise whichever modality is available is used
-- Confidence = count(dominant) / total segments
-- Stability = `1 - (unique_emotions - 1) / 7`
-- Transition rate = emotion changes / (segments - 1)
+1. the uploaded file is saved to a unique temp path
+2. FFmpeg converts or normalizes the video stream
+3. FFmpeg extracts audio as mono PCM at 16 kHz
+4. OpenCV checks for a visible human face
+5. temporal audio and video segments are created
 
-### 3.4 Cognitive + LLM Layers
+### Audio inference path
 
-Cognitive summary:
-- Produces short reasoning text based on consistency and stability
+Audio processing uses MFCC features.
 
-LLM generation (`/process`, `/analyze_history`, `/chat`):
-- Uses Groq endpoint: `https://api.groq.com/openai/v1/chat/completions`
-- Model: `llama-3.3-70b-versatile`
-- JSON output hardening in `/process`: merges missing keys with fallback templates
+Important parameters:
 
-Fallback behavior:
-- If Groq call fails or malformed response occurs, backend returns deterministic fallback story/quote/video/books/songs by emotion.
+- sample rate: `16000`
+- MFCC count: `13`
+- hop length: `512`
+- frame target: `300`
 
-### 3.5 Persistence Architecture
+The audio model predicts emotion on temporal MFCC windows.
 
-#### SQLite (`emotionai.db`)
+### Video inference path
 
-`history` table:
-- `id INTEGER PRIMARY KEY AUTOINCREMENT`
-- `timestamp DATETIME DEFAULT CURRENT_TIMESTAMP`
-- `fused_emotion TEXT`
-- `audio_emotion TEXT`
-- `video_emotion TEXT`
-- `confidence REAL`
-- `stability REAL`
-- `reasoning TEXT`
+Video processing uses:
 
-`music_mappings` table:
-- `emotion TEXT PRIMARY KEY`
-- `music_path TEXT`
+- resized frames at `112x112`
+- `NUM_FRAMES = 10` frames per segment
+- MobileNetV2 feature extraction
+- a dense emotion classifier on pooled features
 
-#### Electron userData persistence
+### Job progress tracking
 
-Used by renderer + main process:
-- `settings.json` for app settings
-- `results.json` for analysis history shown in calendar/history view
-- `analyses/<date>.json` for cached range-based AI trend reports
+Processing state is tracked through a per-job in-memory structure:
 
-### 3.6 File/Media Lifecycle
+- `progress`
+- `status`
+- `results`
 
-Temporary files during `/process`:
-- `temp_raw_video.webm`
-- `temp_video.mp4`
-- `temp_audio.wav`
+This drives the frontend progress UI and daemon background status.
 
-Music cache:
-- `music/<sanitized_song_id_title>.mp3`
-- Served by `/downloaded_music/<filename>`
+## 6. Frontend and Desktop Architecture
 
-### 3.7 Progress and State Model
+The desktop app lives under [frontend](/c:/Users/chint/Desktop/4-2/4-2-project/frontend).
 
-Global shared state:
-- `progress_state = { progress, status, results }`
-- Updated across pipeline stages and exposed via `GET /status`
+### Main layers
 
-Important characteristic:
-- Single global object means concurrent `/process` requests share status state.
+- Electron main process: [frontend/main.cjs](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/main.cjs)
+- React renderer app shell: [frontend/src/App.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/App.jsx)
+- custom hooks for recorder, processing, daemon, and settings
+- UI components for dashboard, charts, history, assistant, and settings
 
-## 4) API Contract (Backend)
+### Electron main process responsibilities
 
-### 4.1 `GET /status`
-Returns processing progress.
+- create and manage the main window
+- create the tray icon and tray menu
+- persist settings and results in `userData`
+- launch the Flask backend on demand
+- reuse an already-running backend if port `5000` is occupied
+- expose IPC handlers to the renderer
+- display system notifications
+- print terminal logs for Electron and forwarded renderer activity
 
-Response:
+### React renderer responsibilities
+
+- manual capture and upload
+- progress display
+- temporal insight rendering
+- assistant chat experience
+- auto mode monitoring
+- history and time-range analysis
+- local in-app playback of support tracks
+
+### Main hooks
+
+- [frontend/src/hooks/useMediaRecorder.js](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/hooks/useMediaRecorder.js)
+  - camera and microphone permissions
+  - live preview
+  - manual recording
+
+- [frontend/src/hooks/useProcessing.js](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/hooks/useProcessing.js)
+  - calls `/process`
+  - tracks progress
+  - stores manual analysis results
+
+- [frontend/src/hooks/useDaemon.js](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/hooks/useDaemon.js)
+  - auto mode loop
+  - background capture
+  - background analysis
+  - shift detection
+  - notification flow
+
+- [frontend/src/hooks/useSettings.js](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/hooks/useSettings.js)
+  - persistent configuration
+  - local music mappings
+
+## 7. Emotion and Stress Logic
+
+EmotionAI does not only return a class label. It also derives stress-related indicators from temporal behavior.
+
+### Temporal outputs
+
+The backend builds:
+
+- `audio_temporal`
+- `video_temporal`
+- `audio_probs_temporal`
+- `video_probs_temporal`
+- `emotion_distribution`
+- `time_points`
+
+### Aggregated metrics
+
+The backend computes:
+
+- dominant emotion
+- timeline confidence
+- emotional stability
+- transition rate
+- estimated stress score
+- estimated stress label
+
+### Stress baseline map
+
+Stress estimation starts from emotion-specific baselines:
+
+- happy: low baseline
+- neutral: low-moderate baseline
+- surprised: medium baseline
+- sad: elevated baseline
+- disgust: elevated baseline
+- fearful: high baseline
+- angry: highest baseline
+
+Then it adjusts using:
+
+- transition rate
+- emotional stability
+
+The result is bucketed into:
+
+- `low`
+- `moderate`
+- `high`
+
+## 8. AI Layers
+
+EmotionAI uses Groq for three separate AI behaviors.
+
+### 1. Support content generation during `/process`
+
+The backend asks Groq to produce:
+
+- a short supportive story
+- a tailored quote
+- one video suggestion
+- book suggestions
+- song suggestions
+- meme suggestions
+
+If Groq fails, deterministic fallback content is returned by emotion.
+
+### 2. Time-range analysis during `/analyze_history`
+
+The History page can send historical results to Groq so the model explains:
+
+- whether the user is improving or under pressure
+- emotional trends across the selected range
+- important shifts
+- practical support suggestions
+
+### 3. Assistant replies during `/chat`
+
+The assistant uses:
+
+- the latest result
+- recent conversation memory
+- recent stored historical runs
+
+to answer questions in simple, supportive language.
+
+## 9. Persistence and Data Storage
+
+EmotionAI stores data in two places.
+
+### SQLite database
+
+File:
+
+- [emotionai.db](/c:/Users/chint/Desktop/4-2/4-2-project/emotionai.db)
+
+Used by the Flask backend for:
+
+- analysis history
+- music mappings
+
+Important history fields include:
+
+- timestamp
+- fused emotion
+- audio emotion
+- video emotion
+- confidence
+- stability
+- reasoning
+- stress score
+- stress label
+
+### Electron userData persistence
+
+Used by the desktop app for:
+
+- `settings.json`
+- `results.json`
+- cached time-range analyses in `analyses/*.json`
+
+This allows the app to restore settings and show history even across restarts.
+
+## 10. API Reference
+
+### `POST /process`
+
+Input:
+
+- multipart form data
+- `video` file field
+
+Output includes:
+
+- `audio_emotion`
+- `video_emotion`
+- `fused_emotion`
+- `reasoning`
+- `story`
+- `quote`
+- `video`
+- `books`
+- `songs`
+- `memes`
+- `audio_temporal`
+- `video_temporal`
+- `audio_probs_temporal`
+- `video_probs_temporal`
+- `timeline_confidence`
+- `emotional_stability`
+- `transition_rate`
+- `emotion_distribution`
+- `stress_score`
+- `stress_label`
+- `job_id`
+
+### `GET /status?job_id=...`
+
+Returns current job progress and status.
+
+### `GET /history?limit=...`
+
+Returns recent history rows from SQLite.
+
+### `DELETE /history`
+
+Clears history rows from SQLite.
+
+### `GET /mappings`
+
+Returns current emotion-to-music mappings.
+
+### `POST /mappings`
+
+Accepts:
+
 ```json
 {
-  "progress": 70,
-  "status": "Neural Audio Inference: Running Batch",
-  "results": null
+  "emotion": "sad",
+  "music_path": "C:/path/to/file.mp3"
 }
 ```
 
-### 4.2 `POST /process`
-Multipart form upload with field: `video`.
+### `POST /analyze_history`
 
-Returns (shape):
-```json
-{
-  "audio_emotion": "sad",
-  "video_emotion": "sad",
-  "fused_emotion": "sad",
-  "reasoning": "Mixed state: sad leads at 43.8% Moderate stability.",
-  "story": "...",
-  "quote": "...",
-  "video": {"title":"...","channel":"...","link":"...","reason":"..."},
-  "books": [{"title":"...","author":"...","reason":"...","purchase_link":"..."}],
-  "songs": [{"artist":"...","title":"...","explanation":"..."}],
-  "audio_temporal": ["sad", "neutral"],
-  "video_temporal": ["sad", "sad"],
-  "audio_probs_temporal": [[0.1,0.2]],
-  "video_probs_temporal": [[0.2,0.1]],
-  "time_points": [0,1,2],
-  "timeline_confidence": 0.43,
-  "emotional_stability": 0.71,
-  "transition_rate": 0.28,
-  "emotion_distribution": {"sad": 7, "neutral": 3}
-}
-```
+Accepts selected history rows and returns an AI range summary.
 
-### 4.3 `GET /music/search?q=...`
-Searches song via Saavn API, caches locally when possible, returns metadata + preview URL.
+### `POST /chat`
 
-### 4.4 History and mapping endpoints
-- `GET /history?limit=50`
-- `DELETE /history`
-- `GET /mappings`
-- `POST /mappings` with `{ "emotion": "sad", "music_path": "C:/.../track.mp3" }`
+Accepts:
 
-### 4.5 AI endpoints
-- `POST /analyze_history` with `{ "history": [...] }`
-- `POST /chat` with `{ "message": "...", "context": {...}, "history": [...] }`
+- current message
+- current result context
+- conversation history
+- prior analysis history
 
-### 4.6 Local stream endpoint
-- `GET /stream_local?path=<absolute_path>`
+Returns an assistant reply.
 
-## 5) Frontend/Desktop Integration with Backend
+### `GET /music/search?q=...`
 
-Key integration points:
-- `frontend/src/main.jsx`: sets `axios.defaults.baseURL = 'http://localhost:5000'`
-- Manual analysis checks backend status and starts it via IPC if needed
-- Auto-mode daemon also starts backend on-demand
-- Calendar view loads history from Electron `results.json` (or backend fallback outside Electron)
+Searches the Saavn API, caches audio when possible, and returns song metadata and a preview path.
 
-IPC handlers in `frontend/main.cjs`:
-- Settings: `load-settings`, `save-settings`
-- Results: `load-results`, `save-result`
-- Analysis cache: `load-analysis`, `save-analysis`
-- Backend control: `start-backend`, `stop-backend`, `backend-status`
-- Notifications: `notify-shift`
+### `GET /downloaded_music/<filename>`
 
-## 6) Repository Map
+Serves cached local music files from the backend cache.
+
+### `GET /stream_local?path=...`
+
+Streams a local absolute path. The desktop app uses this for in-app playback of mapped intervention songs.
+
+## 11. Repository Map
 
 ```text
 .
 |-- app.py
+|-- README.md
+|-- documentation.md
+|-- plan.md
 |-- requirements.txt
 |-- emotionai.db
 |-- models/
-|   |-- audio_emotion_model.h5
-|   |-- video_emotion_model.h5
-|   |-- fusion_emotion.h5
-|   `-- haarcascade_frontalface_default.xml
-|-- music/
+|-- plots/
 |-- scripts/
 |   |-- data_processing/
 |   |-- model_training/
 |   |-- model_testing/
 |   `-- utils/
 |-- tests/
-|-- plots/
 `-- frontend/
-    |-- src/
     |-- main.cjs
     |-- package.json
-    `-- vite.config.js
+    |-- package-lock.json
+    |-- scripts/
+    |-- public/
+    `-- src/
+        |-- App.jsx
+        |-- main.jsx
+        |-- index.css
+        |-- components/
+        |-- hooks/
+        `-- utils/
 ```
 
-## 7) Setup and Run
+## 12. Important Components
 
-### 7.1 Backend setup
+### Dashboard and analysis UI
 
-```bash
-python -m venv myenv
-# Windows
-myenv\Scripts\activate
-# Linux/macOS
-# source myenv/bin/activate
+- [frontend/src/components/RecordingPanel.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/RecordingPanel.jsx)
+- [frontend/src/components/ProcessingLoader.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/ProcessingLoader.jsx)
+- [frontend/src/components/EmotionCards.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/EmotionCards.jsx)
+- [frontend/src/components/TemporalChart.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/TemporalChart.jsx)
+- [frontend/src/components/CognitiveInsights.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/CognitiveInsights.jsx)
+- [frontend/src/components/AIContent.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/AIContent.jsx)
+- [frontend/src/components/InterventionPopup.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/InterventionPopup.jsx)
 
+### History and assistant UI
+
+- [frontend/src/components/CalendarView.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/CalendarView.jsx)
+- [frontend/src/components/Chatbot.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/Chatbot.jsx)
+- [frontend/src/components/SettingsView.jsx](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/components/SettingsView.jsx)
+
+### Logging
+
+- [frontend/src/utils/logger.js](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/src/utils/logger.js)
+
+### Desktop runtime
+
+- [frontend/main.cjs](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/main.cjs)
+- [frontend/scripts/run-electron.cjs](/c:/Users/chint/Desktop/4-2/4-2-project/frontend/scripts/run-electron.cjs)
+
+## 13. Training and Research Assets
+
+The repository also contains training, testing, and visualization assets that support the runtime system.
+
+### Data processing scripts
+
+- [scripts/data_processing/organize_data.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/data_processing/organize_data.py)
+- [scripts/data_processing/extract_audio_features.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/data_processing/extract_audio_features.py)
+- [scripts/data_processing/extract_video_frames.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/data_processing/extract_video_frames.py)
+- [scripts/data_processing/merge_and_relabel_datasets.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/data_processing/merge_and_relabel_datasets.py)
+
+### Training scripts
+
+- [scripts/model_training/train_audio_model.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/train_audio_model.py)
+- [scripts/model_training/train_video_model.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/train_video_model.py)
+- [scripts/model_training/train_complete_pipeline.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/train_complete_pipeline.py)
+- [scripts/model_training/train_temporal_sequence.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/train_temporal_sequence.py)
+- [scripts/model_training/train_temporal_video.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/train_temporal_video.py)
+- [scripts/model_training/train_hybrid_multimodal.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/train_hybrid_multimodal.py)
+- [scripts/model_training/train_improved_temporal.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/train_improved_temporal.py)
+- [scripts/model_training/train_fer_model.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/train_fer_model.py)
+- [scripts/model_training/run_training_pipeline.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_training/run_training_pipeline.py)
+
+### Testing scripts
+
+- [scripts/model_testing/test_model.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_testing/test_model.py)
+- [scripts/model_testing/test_all_models.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_testing/test_all_models.py)
+- [scripts/model_testing/fuse_models.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_testing/fuse_models.py)
+- [scripts/model_testing/real_time_demo.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/model_testing/real_time_demo.py)
+
+### Utility scripts
+
+- [scripts/utils/data_loader.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/utils/data_loader.py)
+- [scripts/utils/emotion_models.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/utils/emotion_models.py)
+- [scripts/utils/face_detector.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/utils/face_detector.py)
+- [scripts/utils/multimodal_emotion.py](/c:/Users/chint/Desktop/4-2/4-2-project/scripts/utils/multimodal_emotion.py)
+
+## 14. Setup
+
+### Prerequisites
+
+- Python 3.10 or newer
+- Node.js and npm
+- Windows environment for the packaged desktop experience
+- `GROQ_API_KEY` set in the environment
+
+### Python setup
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Set key:
+### Node setup
 
-```bash
-# Windows cmd
-set GROQ_API_KEY=your_key_here
-# PowerShell
-$env:GROQ_API_KEY="your_key_here"
-# Linux/macOS
-export GROQ_API_KEY=your_key_here
+```powershell
+cd frontend
+npm install
 ```
 
-Run:
+### Environment variable
 
-```bash
+PowerShell:
+
+```powershell
+$env:GROQ_API_KEY="your_key_here"
+```
+
+## 15. How to Run
+
+### Run backend only
+
+```powershell
 python app.py
 ```
 
-Backend binds to `127.0.0.1:5000`.
+Backend binds to:
 
-### 7.2 Desktop app setup
+- `http://127.0.0.1:5000`
 
-```bash
+### Run desktop app in development
+
+```powershell
 cd frontend
-npm install
-npm run build
-npm run electron:dist
+npm run electron:start
 ```
 
-## 8) Operational Characteristics
+This starts:
 
-- Upload limit: `100MB` (`MAX_CONTENT_LENGTH`)
-- Backend mode: Flask dev server, `debug=False`, `use_reloader=False`
-- Inference style: batch over temporal windows for video/audio
-- Music cache strategy: on-demand local caching in `music/`
-- Window/tray behavior: app opens visible, closing hides to tray (keeps service alive)
+- the Vite dev server on `127.0.0.1:5173`
+- the Electron app
+- the Flask backend when needed
 
-## 9) Failure Modes and Recovery
+### Build the frontend
 
-1. Model load failure at startup
-- Symptom: `/process` returns model-not-loaded error
-- Recovery: verify model files in `models/`
+```powershell
+cd frontend
+npm run build
+```
 
-2. FFmpeg normalization/extraction failure
-- Recovery in code: falls back to raw video when normalization fails; audio path may be omitted
+### Build Windows desktop package
 
-3. Groq API unavailable / malformed response
-- Recovery in code: fallback content templates in `/process`; graceful fallback text in `/chat`
+```powershell
+cd frontend
+npm run electron:build
+```
 
-4. External music API failure
-- Recovery in code: returns service-unavailable or remote stream URL without local cache
+## 16. Logging and Observability
 
-## 10) Security and Privacy Notes
+The project now has end-to-end terminal logging.
 
-- Captured media is temporarily stored during processing and removed afterward
-- Historical analytics are stored locally (SQLite + Electron userData)
-- `/stream_local` serves arbitrary absolute path if file exists; keep app on trusted local machine only
-- Secrets: `GROQ_API_KEY` must be provided through environment variable
+### Backend logs
 
-## 11) Known Gaps / Improvement Backlog
+Backend logs include:
 
-- `frontend/package.json` lacks `dev` script while `electron:start` expects it
-- `/status` uses global process state and is not isolated per request/session
-- Dominant timeline currently prefers video when both modalities are present
-- Code contains legacy helper paths/functions that can be consolidated
+- API request start and end
+- processing job start, progress, completion, and failure
+- face-gate and FFmpeg stages
+- history-analysis and chat requests
 
-## 12) Quick Reference: Important Files
+### Electron main logs
 
-- Backend entry: `app.py`
-- Electron main process: `frontend/main.cjs`
-- React app shell: `frontend/src/App.jsx`
-- Background daemon hook: `frontend/src/hooks/useDaemon.js`
-- Processing hook: `frontend/src/hooks/useProcessing.js`
-- Settings hook: `frontend/src/hooks/useSettings.js`
-- Calendar/insights: `frontend/src/components/CalendarView.jsx`
+Electron logs include:
 
+- backend start and reuse
+- settings and result persistence
+- window and tray lifecycle
+- notifications
+
+### Renderer logs
+
+Renderer logs are forwarded into the terminal through Electron IPC and include:
+
+- manual recording start and stop
+- manual analysis flow
+- background daemon recording and processing
+- settings changes
+- history loading and AI analysis
+- in-app support song playback
+
+## 17. Known Constraints
+
+- The backend uses Flask development serving, not a production WSGI deployment
+- The face gate requires a visible human face in recorded video
+- Local streaming endpoints should be used only on a trusted local machine
+- AI quality depends on the Groq API being available and properly configured
+- Auto-play depends on valid local song mappings and accessible file paths
+- The current implementation is Windows-oriented for packaging and runtime assumptions
+
+## 18. Future Improvements
+
+- stronger concurrent job isolation beyond current in-memory progress tracking
+- improved multimodal fusion logic instead of current dominant timeline selection behavior
+- richer longitudinal analytics and reporting
+- better packaging, installer polish, and update flow
+- stronger model evaluation documentation and reproducible training notebooks
+- optional containerization of the backend
+- expanded datasets and better generalization across conditions and demographics
+
+## Summary
+
+EmotionAI is a full-stack, multimodal affect-analysis system with:
+
+- a React and Electron desktop experience
+- a Flask processing backend
+- TensorFlow audio and video inference
+- temporal reasoning and stress estimation
+- AI-generated support content and assistant replies
+- persistent local history and settings
+- background monitoring and intervention flow
+
+This README is intended to be the main technical entry point for understanding how the full project is structured and how the pieces work together.
